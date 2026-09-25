@@ -15,14 +15,14 @@ def ocr_lines(image_path, band_fraction=0.15):
     band = img.crop((0, int(h * (1 - band_fraction)), w, h))
 
     # 2. upscale 3x — tesseract reads big pixels far better than tiny ones
-    band = band.resize((band.width * 3, band.height * 3), Image.LANCZOS)
+    band = band.resize((band.width * 3, band.height * 3), Image.Resampling.LANCZOS)
 
     # 3. grayscale + stretch contrast so white-on-black text pops
     band = band.convert("L")
     band = ImageOps.autocontrast(band)
 
     # 4. read. psm 6 = "assume one uniform block of text"
-    raw = pytesseract.image_to_string(band, config="--psm 6")
+    raw = str(pytesseract.image_to_string(band, config="--psm 6"))
 
     # 5. clean: strip whitespace, drop empty lines
     return [line.strip() for line in raw.splitlines() if line.strip()]

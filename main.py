@@ -1,16 +1,16 @@
-
 import sys
+from PySide6.QtWidgets import QApplication, QMainWindow
 
-from PySide6.QtWidgets import QApplication, QMainWindow, QLabel
+from import_page import ImportPage
 
 app = QApplication(sys.argv)
 
 window = QMainWindow()
-window.setWindowTitle("bone chilling")
-window.resize(800,500)
-window.setCentralWidget(QLabel("Yoo hoo, dog wants a bone"))
+window.setWindowTitle("BoneChilling — Orthopedic Radiology Workstation")
+window.resize(1280, 800)
+
+# Put the ImportPage inside the main window
+window.setCentralWidget(ImportPage())
+
 window.show()
-
 sys.exit(app.exec())
-
-

@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mihir Maru - Resume</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #1e293b;
+            background-color: #f8fafc;
+            max-width: 820px;
+            margin: 32px auto;
+            padding: 48px 52px;
+            box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
+            border-radius: 4px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            margin-bottom: 22px;
+            padding-bottom: 2px;
+        }
+
+        h1 {
+            font-size: 26px;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #0f172a;
+        }
+
+        .contact-info {
+            font-size: 12.5px;
+            color: #475569;
+            letter-spacing: 0.2px;
+            line-height: 1.6;
+        }
+
+        .contact-info a {
+            color: #1d4ed8;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.15s ease;
+        }
+
+        .contact-info a:hover {
+            text-decoration: underline;
+            color: #0f172a;
+        }
+
+        /* Sections */
+        section {
+            margin-bottom: 18px;
+            page-break-inside: avoid;
+        }
+
+        h2 {
+            font-size: 13px;
+            font-weight: 700;
+            border-bottom: 1.5px solid #0f172a;
+            padding-bottom: 3px;
+            margin-top: 15px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: #0f172a;
+        }
+
+        /* Item Headers & Subheaders */
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 3px;
+        }
+
+        /* Top-level Company / Institution Header */
+        section > .item-header {
+            font-size: 15px;
+            font-weight: 700;
+            color: #0f172a;
+            letter-spacing: 0.3px;
+        }
+
+        section > .item-header span:first-child {
+            font-size: 15px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        section > .item-header span:last-child {
+            font-size: 13px;
+            font-weight: 600;
+            color: #475569;
+        }
+
+        /* Primary Job Role & Timeline */
+        .item-subheader {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            font-size: 13px;
+            color: #334155;
+            margin-bottom: 14px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .item-subheader span:first-child {
+            font-style: italic;
+            font-weight: 600;
+            color: #1e3a8a; /* Distinct deep navy tone to elevate job title */
+        }
+
+        .item-subheader span:last-child {
+            font-style: normal;
+            font-weight: 600;
+            color: #64748b;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Projects Nested Under Employer */
+        div[style*="margin-top"] {
+            margin-top: 14px !important;
+            margin-bottom: 16px;
+            padding-left: 14px;
+            border-left: 2.5px solid #cbd5e1;
+            transition: border-color 0.2s ease;
+        }
+
+        div[style*="margin-top"]:hover {
+            border-left-color: #3b82f6;
+        }
+
+        div[style*="margin-top"] > .item-header {
+            margin-bottom: 6px;
+        }
+
+        div[style*="margin-top"] > .item-header span:first-child {
+            font-size: 13.5px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        div[style*="margin-top"] > .item-header span:last-child {
+            font-size: 12px;
+            font-weight: 500;
+            font-style: italic;
+            color: #64748b;
+        }
+
+        /* Paragraphs & Summary */
+        p {
+            font-size: 13px;
+            line-height: 1.55;
+            color: #334155;
+            margin: 0 0 6px 0;
+            text-align: justify;
+        }
+
+        /* Bullet Lists */
+        ul {
+            margin: 6px 0 0 0;
+            padding-left: 18px;
+            list-style-type: disc;
+        }
+
+        li {
+            margin-bottom: 5px;
+            font-size: 12.5px;
+            line-height: 1.55;
+            color: #334155;
+        }
+
+        li:last-child {
+            margin-bottom: 0;
+        }
+
+        strong {
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        /* Skills & Coursework Lines */
+        .skills-line {
+            font-size: 12.5px;
+            line-height: 1.65;
+            color: #334155;
+            margin: 4px 0 0 0;
+            text-align: left;
+        }
+
+        .skills-line strong {
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        /* Print / PDF Export Optimization */
+        @media print {
+            body {
+                background-color: #ffffff;
+                padding: 0;
+                margin: 0;
+                max-width: 100%;
+                box-shadow: none;
+                border-radius: 0;
+                color: #000000;
+            }
+
+            .contact-info a {
+                color: #000000;
+                text-decoration: none;
+            }
+
+            @page {
+                size: letter;
+                margin: 0.45in 0.5in;
+            }
+
+            section {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Mihir Maru</h1>
+        <div class="contact-info">
+            Rajkot, Gujarat • +91-9313232535 • <a href="mailto:mihirmaru090@gmail.com">mihirmaru090@gmail.com</a> • 
+            <a href="https://linkedin.com/in/mihir-maru" target="_blank">linkedin.com/in/mihir-maru</a> • 
+            <a href="https://github.com/Mihirmaru22" target="_blank">github.com/Mihirmaru22</a>
+        </div>
+    </header>
+
+    <section>
+        <h2>Summary</h2>
+        <p>AI Engineer specializing in LLM systems, retrieval infrastructure, agentic workflows, and AI automation. Experienced in building RAG, Text-to-SQL, multimodal AI, and autonomous research systems using Python, FastAPI, vector databases, and LLM orchestration. Open-source contributor to PyTorch TorchData.</p>
+    </section>
+
+    <section>
+        <h2>Experience</h2>
+        <div class="item-header">
+            <span>PARAM SOFTWARE</span>
+            <span>Rajkot, India</span>
+        </div>
+        <div class="item-subheader">
+            <span>AI & Python Automation Trainee</span>
+            <span>Jun 2026 – Present</span>
+        </div>
+
+        <div style="margin-top: 10px;">
+            <div class="item-header">
+                <span>GlobalMind — Enterprise Hybrid RAG & Text-to-SQL Platform</span>
+                <span>Project Lead and AI Engineer</span>
+            </div>
+            <ul>
+                <li>Engineered a <strong>multi-tenant enterprise intelligence platform</strong> combining <strong>Hybrid RAG</strong> (dense vectors + sparse keyword search) with automated <strong>Text-to-SQL</strong> capabilities over relational databases.</li>
+                <li>Implemented <strong>Qdrant/BM25 hybrid retrieval</strong> with <strong>RRF</strong> and <strong>cross-encoder reranking</strong>, supporting retrieval across a <strong>70-table enterprise schema</strong> and <strong>163-question evaluation suite</strong>.</li>
+                <li>Designed a <strong>secure Text-to-SQL pipeline</strong> with schema reflection, query validation, and sandboxed execution, achieving <strong>96.3% execution accuracy</strong> across 163 benchmark queries.</li>
+                <li>Built asynchronous <strong>FastAPI/Celery/Redis infrastructure</strong> with a measured <strong>3.5–5.5s cold-start pipeline latency</strong> under benchmark conditions.</li>
+            </ul>
+        </div>
+
+        <div style="margin-top: 15px;">
+            <div class="item-header">
+                <span>Argus — Autonomous Web Intelligence Engine</span>
+                <span>Project Lead and AI Engineer</span>
+            </div>
+            <ul>
+                <li>Developing an <strong>autonomous research engine</strong> that decomposes business research objectives into search, crawling, extraction, verification, and investigation tasks.</li>
+                <li>Designing an <strong>evidence-first architecture</strong> connecting entities, claims, sources, passages, and provenance for auditable intelligence.</li>
+                <li>Implementing <strong>specialized LLM roles</strong> for high-volume extraction, research reasoning, conflict resolution, and critical evidence evaluation.</li>
+            </ul>
+        </div>
+
+        <div style="margin-top: 15px;">
+            <div class="item-header">
+                <span>CEO-Directed Initiative — BoneChilling Orthopedic Radiology Workstation & AI Ingestion Pipeline</span>
+                <span>Project Lead and AI Engineer</span>
+            </div>
+            <ul>
+                <li>Developed an <strong>AI-assisted orthopedic radiology workstation</strong> in response to a requirement raised directly by the CEO, taking the idea from an informal request to a functional end-to-end system.</li>
+                <li>Built <strong>asynchronous multi-patient ingestion</strong> combining X-ray pre-filtering, targeted OCR, demographic normalization, and local <strong>Qwen2.5-VL</strong> inference.</li>
+                <li>Implemented cross-projection hardware reconciliation, clinician verification workflows, <strong>SQLite</strong> persistence, and <strong>Excel</strong> reporting.</li>
+            </ul>
+        </div>
+    </section>
+
+    <section>
+        <h2>Open Source Contributions</h2>
+        <div class="item-header">
+            <span>PyTorch TorchData</span>
+            <span>Meta Open Source</span>
+        </div>
+        <ul>
+            <li>Merged code contributions into Meta's PyTorch TorchData repository after passing strict CI/CD and maintainer reviews.</li>
+            <li>Eliminated a critical concurrency bug to prevent data loaders from silently freezing in distributed training pipelines, improving reliability for large-scale deep learning workflows.</li>
+            <li>Added input validation and regression tests to catch errors early and improve overall framework stability.</li>
+        </ul>
+    </section>
+
+    <section>
+        <h2>Education</h2>
+        <div class="item-header">
+            <span>Gujarat Technological University</span>
+            <span>Ahmedabad, Gujarat</span>
+        </div>
+        <div class="item-subheader">
+            <span>Bachelor of Engineering in Information Technology (CGPA: 8.2/10)</span>
+            <span>Apr 2026</span>
+        </div>
+        <p class="skills-line"><strong>Relevant Coursework:</strong> Data Structures & Algorithms, Deep Learning, Natural Language Processing, Database Management</p>
+    </section>
+
+    <section>
+        <h2>Technical Skills</h2>
+        <p class="skills-line">
+            <strong>Languages:</strong> Python, C++, SQL, JavaScript • 
+            <strong>AI/LLM:</strong> RAG, LLM Applications, Agentic Systems, LLM Routing, Embeddings, Reranking, Text-to-SQL, Multimodal AI • 
+            <strong>Frameworks:</strong> FastAPI, LangChain, PyTorch • 
+            <strong>Data/Infrastructure:</strong> Qdrant, SQLite, Redis, Celery, Docker • 
+            <strong>Web/Systems:</strong> REST APIs, Linux, Git, CI/CD • 
+            <strong>Cloud:</strong> AWS
+        </p>
+    </section>
+
+    <section>
+        <h2>Leadership & Activities</h2>
+        <p style="margin: 0 0 5px 0;"><strong>Hackathons & Competitions</strong></p>
+        <ul>
+            <li><strong>SSIP National Hackathon:</strong> Team Leader, 4th Place Finalist.</li>
+            <li><strong>OODO National Hackathon:</strong> Team Leader, 11th Place Finalist (out of ~1,500 teams).</li>
+        </ul>
+    </section>
+
+</body>
+</html>

@@ -16,7 +16,7 @@ SAMPLE_LINES = [
 DATETIME_RE = re.compile(r"\d{2}/\d{2}/\d{4}\s+\d{1,2}:\d{2}:\d{2}\s*[AP]M")
 VIEW_RE     = re.compile(r"\b(AP|PA|LAT|LATERAL|OBLIQUE)\b")
 BODY_RE     = re.compile(r"\b(elbow|chest|wrist|knee|shoulder|ankle|hand|foot|"
-                         r"hip|pelvis|spine|skull|forearm|humerus|femur|tibia|"
+                         r"hip|pelvis|spine|skull|forearm|humerus|femur|femer|tibia|"
                          r"fibula|clavicle)\b", re.I)
 PERSON_RE   = re.compile(
     r"(?P<name>.+?)\s+(?P<age>\d{1,3})\s*year\(s\)?\s*/\s*(?P<sex>male|female)"
@@ -55,19 +55,24 @@ def normalize(lines):
         if v not in out["views"]:
             out["views"].append(v)
     bm = BODY_RE.search(text)
-    out["body_part"] = bm.group(0).lower() if bm else None
+    if bm:
+        bp = bm.group(0).lower()
+        out["body_part"] = "femur" if bp == "femer" else bp
+    else:
+        out["body_part"] = None
 
     # --- hospital ---
     for line in lines:
         if "hospital" in line.lower():
-            out["hospital"] = line.strip()
+            out["hospital"] = line.strip(" |-_.,:;~'")
             break
 
     # --- person line ---
     for line in lines:
         pm = PERSON_RE.search(line)
         if pm:
-            out["name"] = pm.group("name").strip()
+            clean_name = pm.group("name").strip(" |-_.,:;~'")
+            out["name"] = clean_name
             out["age"] = pm.group("age")
             out["sex"] = "M" if pm.group("sex").lower() == "male" else "F"
             rest = pm.group("rest")

@@ -1,0 +1,572 @@
+{
+  "overall_time_sec": 1104.19,
+  "total_folders": 4,
+  "folder_summaries": [
+    {
+      "folder": "1",
+      "total_files": 3,
+      "xrays_processed": 3,
+      "non_xrays_skipped": 0,
+      "patient_name": "CHANDANBEN RATHOD",
+      "total_time_sec": 168.71,
+      "avg_time_per_xray": 56.24
+    },
+    {
+      "folder": "2",
+      "total_files": 5,
+      "xrays_processed": 5,
+      "non_xrays_skipped": 0,
+      "patient_name": "JAYANTIBHAI SOLANKI",
+      "total_time_sec": 265.57,
+      "avg_time_per_xray": 53.11
+    },
+    {
+      "folder": "3",
+      "total_files": 4,
+      "xrays_processed": 4,
+      "non_xrays_skipped": 0,
+      "patient_name": "KANAIYALAL DHINORA",
+      "total_time_sec": 209.91,
+      "avg_time_per_xray": 52.48
+    },
+    {
+      "folder": "4",
+      "total_files": 7,
+      "xrays_processed": 7,
+      "non_xrays_skipped": 0,
+      "patient_name": "KARSHABHAI BHARVAD",
+      "total_time_sec": 460.0,
+      "avg_time_per_xray": 65.71
+    }
+  ],
+  "detailed_results": [
+    {
+      "folder": "1",
+      "filename": "20251018_130343.jpg",
+      "is_xray": true,
+      "patient_id": 1,
+      "patient_name": "CHANDANBEN RATHOD",
+      "age_sex": "71/F",
+      "accession": "141064",
+      "ocr_lines_count": 5,
+      "body_part": "femur",
+      "views": [
+        "AP",
+        "LAT"
+      ],
+      "hardware": [],
+      "impression": "The femur and hip joint appear to be intact with normal bone alignment, cortical continuity, and joint spaces. No acute hardware failure or dislocation is observed.",
+      "confidence": 0.9,
+      "timings": {
+        "filter_sec": 0.1251,
+        "ocr_sec": 1.443,
+        "norm_sec": 0.0001,
+        "vision_sec": 73.78,
+        "db_sec": 0.0138,
+        "total_sec": 75.36
+      }
+    },
+    {
+      "folder": "1",
+      "filename": "20251018_130356.jpg",
+      "is_xray": true,
+      "patient_id": 1,
+      "patient_name": "CHANDANBEN RATHOD",
+      "age_sex": "71/F",
+      "accession": "161018",
+      "ocr_lines_count": 5,
+      "body_part": "femur",
+      "views": [
+        "AP",
+        "LAT"
+      ],
+      "hardware": [
+        "2 K-wires at medial condyle (intact)",
+        "2 screws at femoral neck (intact)"
+      ],
+      "impression": "Femur & Hip AP/LAT X-ray of a 71-year-old female patient. The femur and hip joint appear to be in normal alignment with intact cortical continuity and congruous joint spaces. The K-wires and screws at the medial condyle and femoral neck are intact.",
+      "confidence": 0.0,
+      "timings": {
+        "filter_sec": 0.1366,
+        "ocr_sec": 1.545,
+        "norm_sec": 0.0002,
+        "vision_sec": 40.72,
+        "db_sec": 0.0026,
+        "total_sec": 42.41
+      }
+    },
+    {
+      "folder": "1",
+      "filename": "20251112_115443.jpg",
+      "is_xray": true,
+      "patient_id": 1,
+      "patient_name": "CHANDANBEN RATHOD",
+      "age_sex": "71/F",
+      "accession": "121114",
+      "ocr_lines_count": 3,
+      "body_part": "femur",
+      "views": [
+        "AP",
+        "LAT"
+      ],
+      "hardware": [
+        "2 K-wires at medial condyle (intact)",
+        "1 Femoral nail (intact)"
+      ],
+      "impression": "The X-ray shows an AP/LAT view of the femur and hip joint with 2 K-wires at the medial condyle and a femoral nail in the femur. The bone alignment, cortical continuity, and joint space appear to be intact with no signs of acute hardware failure or dislocation.",
+      "confidence": 0.0,
+      "timings": {
+        "filter_sec": 0.1412,
+        "ocr_sec": 1.287,
+        "norm_sec": 0.0001,
+        "vision_sec": 49.5,
+        "db_sec": 0.016,
+        "total_sec": 50.94
+      }
+    },
+    {
+      "folder": "2",
+      "filename": "20251018_135905.jpg",
+      "is_xray": true,
+      "patient_id": 2,
+      "patient_name": "JAYANTIBHAI SOLANKI",
+      "age_sex": "35/M",
+      "accession": "181019",
+      "ocr_lines_count": 4,
+      "body_part": "femur",
+      "views": [
+        "AP",
+        "LAT"
+      ],
+      "hardware": [
+        "2 K-wires at medial condyle (intact)",
+        "2 K-wires at lateral condyle (intact)"
+      ],
+      "impression": "Femur & Hip AP/LAT X-ray showing intact K-wires at medial and lateral condyles with intact bone alignment and cortical continuity.",
+      "confidence": 0.9,
+      "timings": {
+        "filter_sec": 0.1542,
+        "ocr_sec": 1.553,
+        "norm_sec": 0.0002,
+        "vision_sec": 45.22,
+        "db_sec": 0.0069,
+        "total_sec": 46.94
+      }
+    },
+    {
+      "folder": "2",
+      "filename": "20251018_135909.jpg",
+      "is_xray": true,
+      "patient_id": 2,
+      "patient_name": "JAYANTIBHAI SOLANKI",
+      "age_sex": "35/M",
+      "accession": "181019",
+      "ocr_lines_count": 3,
+      "body_part": "femur",
+      "views": [
+        "AP",
+        "LAT"
+      ],
+      "hardware": [
+        "2 K-wires at medial condyle (intact)",
+        "1 Distal femoral nail (intact)"
+      ],
+      "impression": "Left femur and knee X-ray with 2 K-wires at the medial condyle and a distal femoral nail. The bone alignment, cortical continuity, and joint spaces appear to be normal with no signs of acute hardware failure or dislocation.",
+      "confidence": 0.0,
+      "timings": {
+        "filter_sec": 0.1904,
+        "ocr_sec": 1.308,
+        "norm_sec": 0.0001,
+        "vision_sec": 59.62,
+        "db_sec": 0.0083,
+        "total_sec": 61.13
+      }
+    },
+    {
+      "folder": "2",
+      "filename": "20251129_173721.jpg",
+      "is_xray": true,
+      "patient_id": 2,
+      "patient_name": "JAYANTIBHAI SOLANKI",
+      "age_sex": "35/M",
+      "accession": "291160",
+      "ocr_lines_count": 3,
+      "body_part": "femur",
+      "views": [
+        "AP",
+        "LAT"
+      ],
+      "hardware": [
+        "2 K-wires at medial condyle (intact)",
+        "1 Distal femoral nail (intact)"
+      ],
+      "impression": "The X-ray shows an anteroposterior (AP) and lateral (LAT) view of the femur and knee joint. Two K-wires are present at the medial condyle of the femur, and a distal femoral nail is present, spanning from the distal femur to the proximal tibia. The bone alignment, cortical continuity, and joint spaces appear to be within normal limits. There is no evidence of acute hardware failure or dislocation.",
+      "confidence": 0.0,
+      "timings": {
+        "filter_sec": 0.1771,
+        "ocr_sec": 1.582,
+        "norm_sec": 0.0002,
+        "vision_sec": 50.89,
+        "db_sec": 0.0041,
+        "total_sec": 52.66
+      }
+    },
+    {
+      "folder": "2",
+      "filename": "20260311_125102.jpg",
+      "is_xray": true,
+      "patient_id": 2,
+      "patient_name": "JAYANTIBHAI SOLANKI",
+      "age_sex": "?/?",
+      "accession": null,
+      "ocr_lines_count": 40,
+      "body_part": "Pelvis",
+      "views": [
+        "LAT",
+        "AP"
+      ],
+      "hardware": [],
+      "impression": "Pelvis X-ray, left side, AP view, intact pelvic bones with symmetrical alignment and intact joint spaces.",
+      "confidence": 0.9,
+      "timings": {
+        "filter_sec": 0.1991,
+        "ocr_sec": 10.851,
+        "norm_sec": 0.0295,
+        "vision_sec": 45.7,
+        "db_sec": 0.0087,
+        "total_sec": 56.79
+      }
+    },
+    {
+      "folder": "2",
+      "filename": "20260311_125117.jpg",
+      "is_xray": true,
+      "patient_id": 2,
+      "patient_name": "JAYANTIBHAI SOLANKI",
+      "age_sex": "?/?",
+      "accession": null,
+      "ocr_lines_count": 4,
+      "body_part": "Pelvis",
+      "views": [
+        "AP"
+      ],
+      "hardware": [],
+      "impression": "Pelvis X-ray, Left Laterality, AP View, No Fractures or Dislocations, Normal Alignment and Cortical Continuity.",
+      "confidence": 0.0,
+      "timings": {
+        "filter_sec": 0.1406,
+        "ocr_sec": 1.753,
+        "norm_sec": 0.0012,
+        "vision_sec": 46.14,
+        "db_sec": 0.0102,
+        "total_sec": 48.05
+      }
+    },
+    {
+      "folder": "3",
+      "filename": "20251221_111957.jpg",
+      "is_xray": true,
+      "patient_id": 3,
+      "patient_name": "KANAIYALAL DHINORA",
+      "age_sex": "93/M",
+      "accession": "201248",
+      "ocr_lines_count": 3,
+      "body_part": "hip",
+      "views": [
+        "Anterior",
+        "Posterior"
+      ],
+      "hardware": [
+        {
+          "implant": "Total Hip Replacement",
+          "location": "Acetabulum",
+          "count": 1,
+          "integrity": "Intact"
+        },
+        {
+          "implant": "Femoral Stem",
+          "location": "Femur",
+          "count": 1,
+          "integrity": "Intact"
+        }
+      ],
+      "impression": "Left Hip Total Hip Replacement with Femoral Stem and Acetabular Component in Place, No Signs of Loosening or Displacement, Congruent Joint Space, Intact Cortical Continuity.",
+      "confidence": 0.0,
+      "timings": {
+        "filter_sec": 0.2311,
+        "ocr_sec": 1.654,
+        "norm_sec": 0.0002,
+        "vision_sec": 57.78,
+        "db_sec": 0.0037,
+        "total_sec": 59.67
+      }
+    },
+    {
+      "folder": "3",
+      "filename": "20251221_112034.jpg",
+      "is_xray": true,
+      "patient_id": 3,
+      "patient_name": "KANAIYALAL DHINORA",
+      "age_sex": "93/M",
+      "accession": "191205",
+      "ocr_lines_count": 8,
+      "body_part": "Pelvis",
+      "views": [
+        "AP"
+      ],
+      "hardware": [],
+      "impression": "Pelvis X-ray, Right Laterality, AP View, No Signs of Fractures or Dislocations, Intact Hip Joints, Congruent Sacrum and Coccyx.",
+      "confidence": 0.0,
+      "timings": {
+        "filter_sec": 0.15,
+        "ocr_sec": 2.02,
+        "norm_sec": 0.0008,
+        "vision_sec": 45.11,
+        "db_sec": 0.0051,
+        "total_sec": 47.29
+      }
+    },
+    {
+      "folder": "3",
+      "filename": "20251221_112054.jpg",
+      "is_xray": true,
+      "patient_id": 3,
+      "patient_name": "KANAIYALAL DHINORA",
+      "age_sex": "?/?",
+      "accession": null,
+      "ocr_lines_count": 24,
+      "body_part": "Lower Limb",
+      "views": [
+        "Anteroposterior (AP)"
+      ],
+      "hardware": [
+        "2 K-wires at medial condyle (intact)"
+      ],
+      "impression": "Anteroposterior view of the left femur with 2 K-wires at the medial condyle, showing normal bone alignment, cortical continuity, and congruous joint spaces.",
+      "confidence": 0.9,
+      "timings": {
+        "filter_sec": 0.1597,
+        "ocr_sec": 1.365,
+        "norm_sec": 0.0002,
+        "vision_sec": 52.52,
+        "db_sec": 0.0111,
+        "total_sec": 54.06
+      }
+    },
+    {
+      "folder": "3",
+      "filename": "20251221_112143.jpg",
+      "is_xray": true,
+      "patient_id": 3,
+      "patient_name": "KANAIYALAL DHINORA",
+      "age_sex": "?/?",
+      "accession": null,
+      "ocr_lines_count": 2,
+      "body_part": "Hip",
+      "views": [
+        "Anteroposterior (AP)"
+      ],
+      "hardware": [
+        "1. Screw in the femoral neck (intact)"
+      ],
+      "impression": "Left Hip with Thigh, Anteroposterior View, Screw in the Femoral Neck (intact), Hip Joint Space Congruity, No Acute Hardware Failure or Dislocation",
+      "confidence": 0.0,
+      "timings": {
+        "filter_sec": 0.1364,
+        "ocr_sec": 1.254,
+        "norm_sec": 0.0009,
+        "vision_sec": 47.49,
+        "db_sec": 0.0059,
+        "total_sec": 48.89
+      }
+    },
+    {
+      "folder": "4",
+      "filename": "20250905_130040.jpg",
+      "is_xray": true,
+      "patient_id": 4,
+      "patient_name": "KARSHABHAI BHARVAD",
+      "age_sex": "35/M",
+      "accession": "050927",
+      "ocr_lines_count": 3,
+      "body_part": "elbow",
+      "views": [
+        "AP",
+        "LAT"
+      ],
+      "hardware": [
+        "Olecranon plate with 4 cortical screws (intact)",
+        "2 K-wires at medial condyle (intact)"
+      ],
+      "impression": "Right elbow with olecranon plate and K-wires, bone alignment within normal limits, cortical continuity intact, joint spaces congruous, no acute hardware failure or dislocation.",
+      "confidence": 0.0,
+      "timings": {
+        "filter_sec": 0.2224,
+        "ocr_sec": 1.689,
+        "norm_sec": 0.0004,
+        "vision_sec": 82.03,
+        "db_sec": 0.0163,
+        "total_sec": 83.96
+      }
+    },
+    {
+      "folder": "4",
+      "filename": "20251004_103127.jpg",
+      "is_xray": true,
+      "patient_id": 4,
+      "patient_name": "KARSHABHAI BHARVAD",
+      "age_sex": "?/?",
+      "accession": null,
+      "ocr_lines_count": 32,
+      "body_part": "Upper Arm",
+      "views": [
+        "AP"
+      ],
+      "hardware": [],
+      "impression": "The left upper arm is in a neutral position with the elbow extended. The humerus and radius are aligned in a straight line. The bone cortex appears intact with no signs of discontinuity or fracture. The joint spaces between the humerus and radius are visible and appear to be congruent.",
+      "confidence": 0.9,
+      "timings": {
+        "filter_sec": 0.1592,
+        "ocr_sec": 1.861,
+        "norm_sec": 0.0007,
+        "vision_sec": 80.46,
+        "db_sec": 0.0088,
+        "total_sec": 82.49
+      }
+    },
+    {
+      "folder": "4",
+      "filename": "20251004_103135.jpg",
+      "is_xray": true,
+      "patient_id": 4,
+      "patient_name": "KARSHABHAI BHARVAD",
+      "age_sex": "?/?",
+      "accession": null,
+      "ocr_lines_count": 18,
+      "body_part": "Upper Arm",
+      "views": [
+        "AP"
+      ],
+      "hardware": [],
+      "impression": "Normal bone alignment, intact cortical continuity, and congruous joint spaces in the right upper arm.",
+      "confidence": 0.9,
+      "timings": {
+        "filter_sec": 0.1891,
+        "ocr_sec": 6.247,
+        "norm_sec": 0.0031,
+        "vision_sec": 99.07,
+        "db_sec": 0.0119,
+        "total_sec": 105.52
+      }
+    },
+    {
+      "folder": "4",
+      "filename": "20251004_103438.jpg",
+      "is_xray": true,
+      "patient_id": 4,
+      "patient_name": "KARSHABHAI BHARVAD",
+      "age_sex": "35/M",
+      "accession": "041004",
+      "ocr_lines_count": 2,
+      "body_part": "Forearm & Elbow",
+      "views": [
+        "AP",
+        "LAT"
+      ],
+      "hardware": [
+        "2 K-wires at medial condyle (intact)",
+        "Olecranon plate with 4 cortical screws (intact)"
+      ],
+      "impression": "Forearm & Elbow X-ray from H.J. Doshi Sarvajanik Hospital, Rajkot. The patient is a 35-year-old male. The X-ray shows intact hardware with no signs of loosening, displacement, or breakage. Bone alignment and cortical continuity are intact, and joint spaces appear congruent.",
+      "confidence": 0.9,
+      "timings": {
+        "filter_sec": 0.1414,
+        "ocr_sec": 1.316,
+        "norm_sec": 0.0001,
+        "vision_sec": 50.84,
+        "db_sec": 0.0085,
+        "total_sec": 52.31
+      }
+    },
+    {
+      "folder": "4",
+      "filename": "20260102_110246.jpg",
+      "is_xray": true,
+      "patient_id": 4,
+      "patient_name": "KARSHABHAI BHARVAD",
+      "age_sex": "35/M",
+      "accession": "020110",
+      "ocr_lines_count": 3,
+      "body_part": "elbow",
+      "views": [
+        "AP",
+        "LAT"
+      ],
+      "hardware": [
+        "Olecranon plate with 4 cortical screws (intact)",
+        "2 K-wires at medial condyle (intact)"
+      ],
+      "impression": "Right elbow with an olecranon plate and 4 cortical screws intact, 2 K-wires at the medial condyle, and no signs of acute hardware failure or dislocation.",
+      "confidence": 0.9,
+      "timings": {
+        "filter_sec": 0.1994,
+        "ocr_sec": 1.535,
+        "norm_sec": 0.0001,
+        "vision_sec": 47.74,
+        "db_sec": 0.0048,
+        "total_sec": 49.48
+      }
+    },
+    {
+      "folder": "4",
+      "filename": "20260102_110304.jpg",
+      "is_xray": true,
+      "patient_id": 4,
+      "patient_name": "KARSHABHAI BHARVAD",
+      "age_sex": "?/?",
+      "accession": null,
+      "ocr_lines_count": 17,
+      "body_part": "Upper Arm",
+      "views": [
+        "AP"
+      ],
+      "hardware": [],
+      "impression": "The left upper arm shows normal bone alignment, cortical continuity, and joint spaces without signs of fractures, dislocations, or surgical hardware.",
+      "confidence": 0.9,
+      "timings": {
+        "filter_sec": 0.1933,
+        "ocr_sec": 1.49,
+        "norm_sec": 0.0003,
+        "vision_sec": 42.37,
+        "db_sec": 0.0045,
+        "total_sec": 44.06
+      }
+    },
+    {
+      "folder": "4",
+      "filename": "20260102_110312.jpg",
+      "is_xray": true,
+      "patient_id": 4,
+      "patient_name": "KARSHABHAI BHARVAD",
+      "age_sex": "?/?",
+      "accession": null,
+      "ocr_lines_count": 16,
+      "body_part": "Shoulder",
+      "views": [
+        "AP",
+        "Lateral"
+      ],
+      "hardware": [],
+      "impression": "The left shoulder joint space is congruent, with no signs of acute hardware failure or dislocation. The humeral head and glenoid fossa are in proper alignment, and the clavicle is intact.",
+      "confidence": 0.9,
+      "timings": {
+        "filter_sec": 0.1489,
+        "ocr_sec": 1.459,
+        "norm_sec": 0.0004,
+        "vision_sec": 40.57,
+        "db_sec": 0.0033,
+        "total_sec": 42.18
+      }
+    }
+  ]
+}

@@ -124,6 +124,19 @@ def cmd_eval(args) -> int:
     return 0
 
 
+def cmd_serve(args) -> int:
+    import uvicorn
+
+    from .api.server import create_app
+
+    app = create_app(token=args.token, db_path=Path(args.db) if args.db else None)
+    print(f"BoneChilling API on http://127.0.0.1:{args.port}")
+    print(f"API token: {app.state.token}")
+    # 127.0.0.1 only: never expose patient data on the network.
+    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
+    return 0
+
+
 def cmd_engine_test(args) -> int:
     engine = _make_engine(args.provider, args.model, args.api_key)
     ok, detail = engine.health_check()
@@ -158,6 +171,12 @@ def build_parser() -> argparse.ArgumentParser:
     pt = sub.add_parser("engine-test", help="validate a provider key/endpoint")
     _add_engine_args(pt)
     pt.set_defaults(func=cmd_engine_test)
+
+    ps = sub.add_parser("serve", help="run the local API server (for the desktop app)")
+    ps.add_argument("--port", type=int, default=8756)
+    ps.add_argument("--token", default=None, help="fixed API token (default: random)")
+    ps.add_argument("--db", default=None)
+    ps.set_defaults(func=cmd_serve)
     return p
 
 

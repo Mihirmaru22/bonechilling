@@ -68,12 +68,12 @@ class AnthropicEngine:
                     resp.raise_for_status()
                     content = self._extract_content(resp.json())
                     return EngineResult(facts=repair_and_validate(content), engine=name,
-                                        latency_ms=getattr(t, "ms", 0), raw_response=content)
+                                        latency_ms=t.elapsed_ms(), raw_response=content)
                 except requests.RequestException as exc:
                     last_err = str(exc)
                     time.sleep(min(2 ** attempt, 8))
         return EngineResult(facts=repair_and_validate(None), engine=name,
-                            error=last_err or "unknown error")
+                            latency_ms=t.elapsed_ms(), error=last_err or "unknown error")
 
     @staticmethod
     def _extract_content(body: dict) -> str:

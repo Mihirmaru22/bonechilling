@@ -60,7 +60,12 @@ class VisionEngine(Protocol):
 class _Timer:
     def __enter__(self):
         self._t = time.perf_counter()
+        self.ms = 0
         return self
 
+    def elapsed_ms(self) -> int:
+        """Live elapsed time — valid inside the with-block, unlike .ms."""
+        return int((time.perf_counter() - self._t) * 1000)
+
     def __exit__(self, *exc):
-        self.ms = int((time.perf_counter() - self._t) * 1000)
+        self.ms = self.elapsed_ms()

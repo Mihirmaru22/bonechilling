@@ -33,6 +33,18 @@ def test_unambiguous_day_first():
     assert out["fields"]["study_date"]["confidence"] >= 0.8
 
 
+def test_month_first_fallback_no_crash():
+    # Regression: '02/13/2024' fails day-first (month 13) -> must swap to
+    # month-first, not crash with a duplicate strptime group.
+    out = normalize(["Knee AP 02/13/2024 JANE ROE 50 / F 12345"])
+    assert out["study_date"] == "2024-02-13", out["study_date"]
+
+
+def test_garbage_date_returns_none():
+    out = normalize(["Ankle 99/99/2024"])
+    assert out["study_date"] is None, out["study_date"]
+
+
 def test_no_person_line_warns():
     out = normalize(["Chest PA", "SOME HOSPITAL"])
     assert out["name"] is None

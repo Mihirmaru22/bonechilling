@@ -76,13 +76,13 @@ class OpenAICompatEngine:
                     resp.raise_for_status()
                     content = self._extract_content(resp.json())
                     facts = repair_and_validate(content)
-                    return EngineResult(facts=facts, engine=name, latency_ms=t_ms(t),
+                    return EngineResult(facts=facts, engine=name, latency_ms=t.elapsed_ms(),
                                         raw_response=content)
                 except requests.RequestException as exc:
                     last_err = str(exc)
                     time.sleep(min(2 ** attempt, 8))
         return EngineResult(facts=repair_and_validate(None), engine=name,
-                            latency_ms=t_ms(t), error=last_err or "unknown error")
+                            latency_ms=t.elapsed_ms(), error=last_err or "unknown error")
 
     @staticmethod
     def _extract_content(body: dict) -> str:
@@ -103,8 +103,3 @@ class OpenAICompatEngine:
             return False, f"HTTP {resp.status_code}"
         except requests.RequestException as exc:
             return False, str(exc)
-
-
-def t_ms(timer: _Timer) -> int:
-    # _Timer.ms is only set on __exit__; during the loop compute live.
-    return getattr(timer, "ms", 0) or int((time.perf_counter() - timer._t) * 1000)

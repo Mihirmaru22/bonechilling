@@ -69,14 +69,20 @@ def _parse_date(text: str) -> Field:
         if not m:
             continue
         raw = m.group(1).replace(" ", "-")
+        dt = None
         try:
             dt = datetime.strptime(raw, fmt)
         except ValueError:
-            # DD/MM vs MM/DD ambiguity: if day>12 the other order is impossible
-            try:
-                dt = datetime.strptime(raw, fmt.replace("%d", "%m", 1) if "%d" in fmt else fmt)
-            except ValueError:
-                return Field(None, 0.0)
+            # DD/MM vs MM/DD ambiguity: if day-first fails (e.g. month > 12),
+            # try month-first by SWAPPING %d and %m (not duplicating them).
+            if "%d" in fmt and "%m" in fmt:
+                swapped = fmt.replace("%d", "\0").replace("%m", "%d").replace("\0", "%m")
+                try:
+                    dt = datetime.strptime(raw, swapped)
+                except ValueError:
+                    dt = None
+        if dt is None:
+            return Field(None, 0.0)
         ambiguous = label in ("DD/MM/YYYY", "DD-MM-YYYY") and dt.day <= 12
         conf = 0.7 if ambiguous else 0.9  # could be MM/DD; lower confidence
         return Field(dt.strftime("%Y-%m-%d"), conf)

@@ -13,10 +13,13 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from ..core.reconcile import reconcile_patient_images
 from ..data import db as db_mod
+from ..data import export as export_mod
 from ..data import settings as settings_mod
 from ..engines.registry import PRESETS, build_engine, config_from_preset, list_models
 from .jobs import JobManager
@@ -49,6 +52,13 @@ class EngineTestBody(BaseModel):
 
 class IngestBody(BaseModel):
     paths: List[str]
+
+
+class ReviewBody(BaseModel):
+    review_status: Optional[str] = None
+    surgeon_notes: Optional[str] = None
+    verified_hardware: Optional[str] = None
+    verified_facts: Optional[str] = None
 
 
 def create_app(
@@ -157,14 +167,41 @@ def create_app(
     def patient(patient_id: int):
         conn = _db()
         try:
+            p = db_mod.get_patient(conn, patient_id)
+            if not p:
+                raise HTTPException(404, "unknown patient")
             imgs = db_mod.get_patient_images(conn, patient_id)
-            if not imgs:
-                rows = [p for p in db_mod.list_patients(conn) if p["id"] == patient_id]
-                if not rows:
-                    raise HTTPException(404, "unknown patient")
-            return {"patient_id": patient_id, "images": imgs}
+            return {
+                "patient": p,
+                "images": imgs,
+                "reconciled_hardware": reconcile_patient_images(imgs),
+            }
         finally:
             conn.close()
+
+    @app.post("/patients/{patient_id}/review", dependencies=[Depends(auth)])
+    def review(patient_id: int, body: ReviewBody):
+        conn = _db()
+        try:
+            if not db_mod.get_patient(conn, patient_id):
+                raise HTTPException(404, "unknown patient")
+            db_mod.update_patient_review(conn, patient_id, **body.model_dump(exclude_none=True))
+            return db_mod.get_patient(conn, patient_id)
+        finally:
+            conn.close()
+
+    @app.get("/export.xlsx", dependencies=[Depends(auth)])
+    def export_xlsx():
+        conn = _db()
+        try:
+            data = export_mod.export_bytes(conn)
+        finally:
+            conn.close()
+        return Response(
+            content=data,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": 'attachment; filename="patient_studies.xlsx"'},
+        )
 
     # ----- progress WebSocket (token via query param) ---------------- #
     @app.websocket("/ws/jobs/{job_id}")

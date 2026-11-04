@@ -129,6 +129,61 @@ def test_ingest_job_and_patients():
     assert detail["images"][0]["engine_used"].startswith("fake"), detail
 
 
+def _seed_patient(db_path):
+    """Seed one patient + image directly (fast, no OCR)."""
+    from bonechiling.data import db as db_mod
+    from bonechiling.core.schema import XrayFacts, HardwareItem, LabelReading
+
+    conn = db_mod.connect(db_path)
+    pid = db_mod.get_or_create_patient_for_folder(conn, "/seed/alpha", "SEED ALPHA")
+    facts = XrayFacts(image_type="X-ray", body_part="olecranon", views=["AP", "LAT"],
+                      hardware=[HardwareItem(implant="olecranon plate", location="olecranon", count=1)],
+                      impression="Olecranon AP/LAT; plate intact.", label=LabelReading(name="SEED ALPHA"))
+    db_mod.save_analysis(conn, pid, {
+        "file_path": "/seed/alpha/a.jpg", "file_sha256": "seedsha1", "raw_ocr": [],
+        "facts": facts, "crosscheck": {}, "film_found": False, "engine": "fake:model",
+        "model_name": "model", "latency_ms": 1, "error": None, "raw_response": None,
+    })
+    conn.close()
+    return pid
+
+
+def test_review_roundtrip():
+    db = _TMP / "review.db"
+    pid = _seed_patient(db)
+    c = _client(db)
+    # detail now carries patient record + reconciled hardware
+    detail = c.get(f"/patients/{pid}", headers=H).json()
+    assert detail["patient"]["review_status"] == "unreviewed"
+    assert any("orthogonal" in s.lower() for s in detail["reconciled_hardware"]), detail["reconciled_hardware"]
+    # submit a review
+    r = c.post(f"/patients/{pid}/review", headers=H,
+               json={"review_status": "verified", "surgeon_notes": "looks good"})
+    assert r.json()["review_status"] == "verified"
+    # persisted
+    again = c.get(f"/patients/{pid}", headers=H).json()["patient"]
+    assert again["review_status"] == "verified" and again["surgeon_notes"] == "looks good"
+    assert again["reviewed_at"]
+
+
+def test_export_xlsx():
+    import io
+    from openpyxl import load_workbook
+
+    db = _TMP / "export.db"
+    _seed_patient(db)
+    c = _client(db)
+    r = c.get("/export.xlsx", headers=H)
+    assert r.status_code == 200
+    assert "spreadsheetml" in r.headers["content-type"]
+    wb = load_workbook(io.BytesIO(r.content))
+    ws = wb.active
+    assert ws.cell(1, 1).value == "Patient"
+    assert ws.cell(2, 1).value == "SEED ALPHA", ws.cell(2, 1).value
+    # reconciled hardware column populated
+    assert "plate" in str(ws.cell(2, 7).value).lower(), ws.cell(2, 7).value
+
+
 def test_ws_bad_token_rejected():
     c = _client(_TMP / "ws.db")
     try:

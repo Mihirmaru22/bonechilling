@@ -52,17 +52,26 @@ document.getElementById("nav").addEventListener("click", (e) => {
 });
 
 // ---- Worklist ------------------------------------------------------------ //
+const statusPill = (s) =>
+  s === "verified" ? `<span class="pill ok">verified</span>` : `<span class="pill muted">unreviewed</span>`;
+
 views.worklist = async () => {
-  app.appendChild(el(`<div><h2>Patient worklist</h2><div id="wl" class="card">Loading…</div></div>`));
+  app.appendChild(el(`<div>
+    <div class="row" style="align-items:center">
+      <h2 style="margin:0">Patient worklist</h2>
+      <div style="flex:0"><button class="btn secondary" id="xlsx" style="margin:0">📊 Download Excel</button></div>
+    </div>
+    <div id="wl" class="card" style="margin-top:14px">Loading…</div></div>`));
+  document.getElementById("xlsx").onclick = downloadExcel;
   try {
     const patients = await api("/patients");
     const wl = document.getElementById("wl");
     if (!patients.length) { wl.innerHTML = `<p class="muted">No patients yet. Use <b>Ingest</b> to analyze a folder.</p>`; return; }
     wl.innerHTML = "";
-    const table = el(`<table><thead><tr><th>Patient</th><th>Films</th><th>Folder</th></tr></thead><tbody></tbody></table>`);
+    const table = el(`<table><thead><tr><th>Patient</th><th>Films</th><th>Status</th><th>Folder</th></tr></thead><tbody></tbody></table>`);
     const tb = table.querySelector("tbody");
     patients.forEach((p) => {
-      const tr = el(`<tr class="clickable"><td>${esc(p.display_name || p.name || "—")}</td><td>${p.image_count}</td><td class="muted">${esc(p.folder_path)}</td></tr>`);
+      const tr = el(`<tr class="clickable"><td>${esc(p.display_name || p.name || "—")}</td><td>${p.image_count}</td><td>${statusPill(p.review_status)}</td><td class="muted">${esc(p.folder_path)}</td></tr>`);
       tr.onclick = () => navigate("patient", p.id);
       tb.appendChild(tr);
     });
@@ -70,26 +79,77 @@ views.worklist = async () => {
   } catch (e) { document.getElementById("wl").innerHTML = `<p class="pill err">${esc(e.message)}</p>`; }
 };
 
+async function downloadExcel() {
+  try {
+    const r = await fetch("/export.xlsx", { headers: { "X-API-Token": TOKEN } });
+    if (!r.ok) throw new Error("export failed (" + r.status + ")");
+    const blob = await r.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "patient_studies.xlsx";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (e) { alert(e.message); }
+}
+
 // ---- Patient detail ------------------------------------------------------ //
 views.patient = async (id) => {
-  app.appendChild(el(`<div><button class="btn secondary" id="back">← Worklist</button><div id="pd" class="card" style="margin-top:14px">Loading…</div></div>`));
+  app.appendChild(el(`<div><button class="btn secondary" id="back">← Worklist</button><div id="pd" style="margin-top:14px">Loading…</div></div>`));
   document.getElementById("back").onclick = () => navigate("worklist");
   try {
     const data = await api(`/patients/${id}`);
+    const p = data.patient;
     const pd = document.getElementById("pd");
-    pd.innerHTML = `<h2>Patient #${id}</h2><div class="films"></div>`;
+    pd.innerHTML = `
+      <div class="card">
+        <h2 style="margin-top:0">${esc(p.display_name || p.name || "Patient #" + id)} ${statusPill(p.review_status)}</h2>
+        <div class="kv">
+          <span class="k">Age / Sex</span><span>${esc(p.age || "?")} / ${esc(p.sex || "?")}</span>
+          <span class="k">Patient ID</span><span>${esc(p.patient_id || "—")}</span>
+          <span class="k">Reconciled hardware</span><span>${(data.reconciled_hardware || []).map(esc).join("<br>") || "—"}</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Surgeon review</h3>
+        <label>Status</label>
+        <select id="rstatus"><option value="unreviewed">Unreviewed</option><option value="verified">Verified</option></select>
+        <label>Clinical notes</label>
+        <textarea id="rnotes">${esc(p.surgeon_notes || "")}</textarea>
+        <label>Override hardware (optional — overrides the AI summary in the export)</label>
+        <input id="rhw" value="${esc(p.verified_hardware || "")}" placeholder="leave blank to keep AI summary" />
+        <button class="btn" id="rsave">Save review</button>
+        <span id="rmsg" style="margin-left:12px"></span>
+      </div>
+      <h3>Films (${data.images.length})</h3>
+      <div class="films"></div>`;
+    pd.querySelector("#rstatus").value = p.review_status || "unreviewed";
     const films = pd.querySelector(".films");
     data.images.forEach((img) => {
-      const hw = safeJson(img.hardware); const views_ = safeJson(img.views);
+      const hw = safeJson(img.hardware), views_ = safeJson(img.views);
+      const cc = safeJson(img.crosscheck_json), name = cc.name || {};
+      const flag = name.status === "conflict" ? ` <span class="pill warn">name conflict</span>` : "";
       films.appendChild(el(`<div class="film">
         <h4>${esc(img.body_part || "—")} ${views_.length ? "(" + views_.map(esc).join(", ") + ")" : ""}</h4>
         <div class="kv">
           <span class="k">Impression</span><span>${esc(img.impression || "—")}</span>
           <span class="k">Hardware</span><span>${hw.length ? hw.map((h) => esc(h.implant || h)).join("; ") : "none"}</span>
+          <span class="k">Label</span><span>${esc(name.value || "—")}${flag}</span>
           <span class="k">Engine</span><span class="muted">${esc(img.engine_used || "—")}</span>
           <span class="k">Status</span><span>${img.error ? `<span class="pill err">error</span>` : `<span class="pill ok">ok</span>`}</span>
         </div></div>`));
     });
+    pd.querySelector("#rsave").onclick = async () => {
+      const body = {
+        review_status: pd.querySelector("#rstatus").value,
+        surgeon_notes: pd.querySelector("#rnotes").value,
+        verified_hardware: pd.querySelector("#rhw").value || null,
+      };
+      pd.querySelector("#rmsg").innerHTML = `<span class="pill muted">saving…</span>`;
+      try {
+        await api(`/patients/${id}/review`, { method: "POST", json: body });
+        pd.querySelector("#rmsg").innerHTML = `<span class="pill ok">saved</span>`;
+      } catch (e) { pd.querySelector("#rmsg").innerHTML = `<span class="pill err">${esc(e.message)}</span>`; }
+    };
   } catch (e) { document.getElementById("pd").innerHTML = `<p class="pill err">${esc(e.message)}</p>`; }
 };
 

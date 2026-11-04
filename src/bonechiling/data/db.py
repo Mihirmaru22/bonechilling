@@ -220,6 +220,34 @@ def list_patients(conn: sqlite3.Connection) -> List[Dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
+def get_patient(conn: sqlite3.Connection, patient_id: int) -> Optional[Dict[str, Any]]:
+    row = conn.execute("SELECT * FROM patients WHERE id = ?", (patient_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def update_patient_review(
+    conn: sqlite3.Connection,
+    patient_id: int,
+    review_status: Optional[str] = None,
+    surgeon_notes: Optional[str] = None,
+    verified_hardware: Optional[str] = None,
+    verified_facts: Optional[str] = None,
+) -> None:
+    """Record the surgeon's verification status, notes, and any overrides."""
+    sets, params = [], []
+    for col, val in (("review_status", review_status), ("surgeon_notes", surgeon_notes),
+                     ("verified_hardware", verified_hardware), ("verified_facts", verified_facts)):
+        if val is not None:
+            sets.append(f"{col} = ?")
+            params.append(val)
+    if not sets:
+        return
+    sets.append("reviewed_at = CURRENT_TIMESTAMP")
+    params.append(patient_id)
+    conn.execute(f"UPDATE patients SET {', '.join(sets)} WHERE id = ?", params)
+    conn.commit()
+
+
 def get_patient_images(conn: sqlite3.Connection, patient_id: int) -> List[Dict[str, Any]]:
     rows = conn.execute(
         """SELECT i.*, f.hardware, f.visible_findings, f.impression, f.image_quality

@@ -22,6 +22,7 @@ from ..data import db as db_mod
 from ..data import export as export_mod
 from ..data import settings as settings_mod
 from ..engines.registry import PRESETS, build_engine, config_from_preset, list_models
+from . import ollama_helper
 from .jobs import JobManager
 
 __version__ = "0.2.0"
@@ -133,6 +134,19 @@ def create_app(
         return {"ok": ok, "detail": detail,
                 "models": list_models(engine.config) if ok else [],
                 "stored": bool(ok and body.store and key)}
+
+    # ----- local AI (Ollama) setup helper ---------------------------- #
+    @app.get("/ollama/status", dependencies=[Depends(auth)])
+    def ollama_status():
+        return ollama_helper.status()
+
+    @app.post("/ollama/pull", dependencies=[Depends(auth)])
+    def ollama_pull(body: Optional[dict] = None):
+        model = (body or {}).get("model") or ollama_helper.RECOMMENDED_MODEL
+        try:
+            return ollama_helper.start_pull(model)
+        except RuntimeError as exc:
+            raise HTTPException(400, str(exc))
 
     # ----- ingest jobs ----------------------------------------------- #
     @app.post("/ingest", dependencies=[Depends(auth)])

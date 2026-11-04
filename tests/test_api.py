@@ -184,6 +184,17 @@ def test_export_xlsx():
     assert "plate" in str(ws.cell(2, 7).value).lower(), ws.cell(2, 7).value
 
 
+def test_ollama_status_shape():
+    # read-only; do NOT POST /ollama/pull in tests (would start a real download)
+    c = _client(_TMP / "ol.db")
+    r = c.get("/ollama/status", headers=H)
+    assert r.status_code == 200
+    s = r.json()
+    for k in ("binary_present", "running", "models", "recommended_model", "install_url"):
+        assert k in s, (k, s)
+    assert isinstance(s["models"], list)
+
+
 def test_ws_bad_token_rejected():
     c = _client(_TMP / "ws.db")
     try:

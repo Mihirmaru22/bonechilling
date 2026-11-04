@@ -1,15 +1,15 @@
-name: Build Windows Executable
+name: Build Windows App
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, industrial-rebuild ]
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build BoneChilling.exe (Windows)
+    name: Build BoneChilling (Windows)
     runs-on: windows-latest
 
     steps:
@@ -19,22 +19,45 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: "pip"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller
           pip install -e .
+          pip install pyinstaller
 
-      - name: Build standalone executable with PyInstaller
+      - name: Run tests
         run: |
-          pyinstaller BoneChilling.spec
+          # eval/ is skipped here (real PHI); run the unit/integration suite
+          $fail = 0
+          Get-ChildItem tests/test_*.py | ForEach-Object {
+            python $_.FullName
+            if ($LASTEXITCODE -ne 0) { $fail = 1 }
+          }
+          if ($fail -ne 0) { exit 1 }
+        shell: pwsh
 
-      - name: Upload Windows Executable
+      - name: Build with PyInstaller
+        run: pyinstaller --clean --noconfirm BoneChilling.spec
+
+      - name: Compile installer (Inno Setup)
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" packaging\installer.iss
+        shell: pwsh
+        continue-on-error: true   # Inno Setup is preinstalled on windows-latest; don't hard-fail the folder build
+
+      - name: Upload app folder
         uses: actions/upload-artifact@v4
         with:
           name: BoneChilling-Windows-x64
-          path: dist/BoneChilling.exe
+          path: dist/BoneChilling
           if-no-files-found: error
+
+      - name: Upload installer (if built)
+        uses: actions/upload-artifact@v4
+        with:
+          name: BoneChilling-Setup
+          path: packaging/Output/*.exe
+          if-no-files-found: ignore

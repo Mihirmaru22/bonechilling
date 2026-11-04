@@ -214,7 +214,9 @@ function navRefreshHint() { const s = document.getElementById("pstatus"); if (s)
 
 // ---- Settings ------------------------------------------------------------ //
 views.settings = async () => {
-  app.appendChild(el(`<div><h2>Settings</h2><div id="st" class="card">Loading…</div></div>`));
+  app.appendChild(el(`<div><h2>Settings</h2><div id="st" class="card">Loading…</div>
+    <div id="ollama" class="card"><h3 style="margin-top:0">Local AI (Ollama)</h3><div id="olbody" class="muted">Checking…</div></div></div>`));
+  loadOllama();
   try {
     const [providers, cfg] = await Promise.all([api("/providers"), api("/settings")]);
     const st = document.getElementById("st");
@@ -259,6 +261,32 @@ views.settings = async () => {
     };
   } catch (e) { document.getElementById("st").innerHTML = `<p class="pill err">${esc(e.message)}</p>`; }
 };
+
+async function loadOllama() {
+  const body = document.getElementById("olbody");
+  if (!body) return;
+  let s;
+  try { s = await api("/ollama/status"); } catch { body.innerHTML = `<span class="pill muted">unavailable</span>`; return; }
+  if (!s.binary_present) {
+    body.innerHTML = `<p>Ollama is not installed. It runs the AI on this PC (private, no key needed).</p>
+      <a class="btn" href="${s.install_url}" target="_blank" rel="noopener">Download Ollama</a>`;
+    return;
+  }
+  const running = s.running ? `<span class="pill ok">running</span>` : `<span class="pill warn">installed, not running</span>`;
+  const hasModel = s.has_recommended ? `<span class="pill ok">${esc(s.recommended_model)} ready</span>`
+                                     : `<span class="pill warn">model not downloaded</span>`;
+  const pulling = s.pull && s.pull.active;
+  body.innerHTML = `<div class="kv">
+      <span class="k">Status</span><span>${running}</span>
+      <span class="k">Model</span><span>${hasModel}</span>
+      <span class="k">Installed</span><span class="muted">${(s.models || []).map(esc).join(", ") || "none"}</span>
+    </div>
+    ${s.has_recommended ? "" : `<button class="btn" id="olpull" ${pulling ? "disabled" : ""}>Download recommended model (${esc(s.recommended_model)})</button>`}
+    ${pulling || (s.pull && s.pull.line) ? `<div class="log" id="olprog">${esc((s.pull && s.pull.line) || "")}</div>` : ""}`;
+  const pull = document.getElementById("olpull");
+  if (pull) pull.onclick = async () => { try { await api("/ollama/pull", { method: "POST", json: {} }); } catch (e) { alert(e.message); } setTimeout(loadOllama, 500); };
+  if (pulling) setTimeout(loadOllama, 1500);  // poll while a pull is in progress
+}
 
 function safeJson(s) { try { return JSON.parse(s) || []; } catch { return []; } }
 

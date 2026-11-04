@@ -54,10 +54,11 @@ class Bridge:
 
 
 def run(port: Optional[int] = None, db_path: Optional[Path] = None) -> int:
-    import uvicorn
-    import webview
+    import os
 
-    port = port or _free_port()
+    import uvicorn
+
+    port = port or int(os.environ.get("BONECHILLING_PORT") or 0) or _free_port()
     token = secrets.token_urlsafe(24)
     app = create_app(token=token, db_path=db_path)
 
@@ -68,6 +69,17 @@ def run(port: Optional[int] = None, db_path: Optional[Path] = None) -> int:
     if not _wait_health(port):
         print("ERROR: backend did not start in time.")
         return 1
+
+    # Headless smoke-test mode (e.g. verifying a packaged build): serve, no window.
+    if os.environ.get("BONECHILLING_NO_WINDOW"):
+        print(f"BoneChilling backend running on http://127.0.0.1:{port} (no-window mode)")
+        try:
+            while True:
+                time.sleep(3600)
+        except KeyboardInterrupt:
+            return 0
+
+    import webview
 
     webview.create_window(
         "BoneChilling — Orthopedic X-ray Reader",

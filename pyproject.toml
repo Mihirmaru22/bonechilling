@@ -15,6 +15,7 @@ dependencies = [
     "pydicom>=2.4.4",
     "pyside6>=6.10.3",
     "pytesseract>=0.3.13",
+    "pywebview>=6.2.1",
     "requests>=2.32.5",
     "uvicorn>=0.39.0",
     "websockets>=15.0.1",

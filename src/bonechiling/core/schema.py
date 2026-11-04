@@ -116,6 +116,8 @@ class XrayFacts(BaseModel):
         for raw in v:
             if isinstance(raw, dict):
                 items.append(raw)
+            elif hasattr(raw, "model_dump"):      # already a HardwareItem / BaseModel
+                items.append(raw.model_dump())
             elif raw is not None:
                 parsed = _parse_hardware_string(str(raw))
                 if parsed:

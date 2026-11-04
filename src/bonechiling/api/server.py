@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from ..data import db as db_mod
@@ -185,5 +186,10 @@ def create_app(
                 await asyncio.sleep(0.25)
         except WebSocketDisconnect:
             pass
+
+    # ----- static SPA (mounted LAST so API routes win) --------------- #
+    ui_dir = Path(__file__).resolve().parent.parent / "webui"
+    if ui_dir.is_dir():
+        app.mount("/", StaticFiles(directory=str(ui_dir), html=True), name="ui")
 
     return app

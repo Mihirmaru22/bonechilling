@@ -5,7 +5,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from bonechiling.core.crosscheck import cross_check, has_conflicts
-from bonechiling.core.schema import LabelReading
+from bonechiling.core.schema import LabelReading, XrayFacts, HardwareItem
+
+
+def test_hardwareitem_passthrough_not_stringified():
+    # Regression: constructing XrayFacts with HardwareItem objects (as seeds/tests
+    # do) must keep structured fields, not stringify the object's repr.
+    f = XrayFacts(image_type="X-ray", body_part="elbow",
+                  hardware=[HardwareItem(implant="olecranon plate", location="olecranon", count=2)])
+    assert len(f.hardware) == 1
+    assert f.hardware[0].implant == "olecranon plate", f.hardware[0]
+    assert f.hardware[0].count == 2
+    assert "implant=" not in f.hardware[0].implant  # not a repr string
 
 
 def test_agreement_verified():

@@ -137,6 +137,12 @@ def cmd_serve(args) -> int:
     return 0
 
 
+def cmd_app(args) -> int:
+    from .desktop.app import run
+
+    return run(db_path=Path(args.db) if args.db else None)
+
+
 def cmd_engine_test(args) -> int:
     engine = _make_engine(args.provider, args.model, args.api_key)
     ok, detail = engine.health_check()
@@ -177,6 +183,10 @@ def build_parser() -> argparse.ArgumentParser:
     ps.add_argument("--token", default=None, help="fixed API token (default: random)")
     ps.add_argument("--db", default=None)
     ps.set_defaults(func=cmd_serve)
+
+    pa = sub.add_parser("app", help="launch the desktop app (server + window)")
+    pa.add_argument("--db", default=None)
+    pa.set_defaults(func=cmd_app)
     return p
 
 

@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
+from ..core import dicom as dicom_mod
 from ..core import film as film_mod
 from ..core import ocr as ocr_mod
 from ..core.crosscheck import cross_check, has_conflicts
@@ -123,32 +124,44 @@ def analyze_image(
         "file_sha256": sha256_file(image_path),
         "film_found": False,
         "raw_ocr": [],
+        "source": "photo",
     }
+    norm = None
+    target = image_path
 
-    # 1. Film detection + straighten (safe fallback to whole image).
-    try:
-        det = film_mod.extract_film(image_path)
-        film_img, rec["film_found"] = det.image, det.found
-    except Exception:
-        film_img = None
+    # 0. DICOM: render pixels + read demographics from tags (no OCR/film needed).
+    if dicom_mod.is_dicom(image_path):
+        study = dicom_mod.read_dicom(image_path)
+        if study is not None:
+            target = study.image
+            norm = study.norm
+            rec["source"] = "dicom"
 
-    # 2. OCR: best of raw photo vs film crop.
-    def _ocr(src):
+    # 1-2. Photo path: detect/straighten film, then OCR best-of(raw, crop).
+    if norm is None:
         try:
-            lines, _ = ocr_mod.read_label(src, backend=ocr_backend)
-            return lines
+            det = film_mod.extract_film(image_path)
+            film_img, rec["film_found"] = det.image, det.found
         except Exception:
-            return []
+            film_img = None
 
-    raw_lines = _ocr(image_path)
-    crop_lines = _ocr(film_img) if (film_img is not None and rec["film_found"]) else []
-    best_lines = crop_lines if _alnum(crop_lines) > _alnum(raw_lines) else raw_lines
-    rec["raw_ocr"] = best_lines
-    norm = normalize(best_lines)
+        def _ocr(src):
+            try:
+                lines, _ = ocr_mod.read_label(src, backend=ocr_backend)
+                return lines
+            except Exception:
+                return []
+
+        raw_lines = _ocr(image_path)
+        crop_lines = _ocr(film_img) if (film_img is not None and rec["film_found"]) else []
+        best_lines = crop_lines if _alnum(crop_lines) > _alnum(raw_lines) else raw_lines
+        rec["raw_ocr"] = best_lines
+        norm = normalize(best_lines)
+        target = film_img if (film_img is not None and rec["film_found"]) else image_path
+
     rec["study_date"] = norm.get("study_date")
 
-    # 3. Vision engine on the film crop (fallback: whole image path).
-    target = film_img if (film_img is not None and rec["film_found"]) else image_path
+    # 3. Vision engine on the chosen image (film crop, DICOM render, or raw).
     result = engine.analyze(target)
 
     # 4. Cross-check OCR demographics vs the VLM's label reading.

@@ -221,12 +221,12 @@ views.settings = async () => {
     const [providers, cfg] = await Promise.all([api("/providers"), api("/settings")]);
     const st = document.getElementById("st");
     st.innerHTML = `
-      <div class="notice">Using a cloud provider sends X-ray images off this device. Local (Ollama) keeps everything on this PC.</div>
       <label>AI provider</label>
       <select id="prov">${providers.map((p) => `<option value="${p.key}" ${p.key === cfg.provider ? "selected" : ""}>${esc(p.label)}${p.needs_key ? (p.has_key ? " ✓ key set" : " — key needed") : ""}</option>`).join("")}</select>
       <div class="hint" id="pnote"></div>
-      <label>Model (blank = recommended default)</label>
-      <input id="model" value="${esc(cfg.model || "")}" placeholder="provider default" />
+      <label>Model <span class="muted">(pick an installed/available one, or type any model name)</span></label>
+      <input id="model" list="modellist" value="${esc(cfg.model || "")}" placeholder="provider default" autocomplete="off" />
+      <datalist id="modellist"></datalist>
       <div id="keyrow">
         <label>API key <span class="muted">(stored securely in your OS credential store)</span></label>
         <input id="key" type="password" placeholder="paste key, then Test & Save" />
@@ -238,10 +238,21 @@ views.settings = async () => {
       <div id="stmsg" style="margin-top:12px"></div>`;
     const provSel = document.getElementById("prov");
     const meta = () => providers.find((p) => p.key === provSel.value);
+    async function loadModels() {
+      const dl = document.getElementById("modellist");
+      const model = document.getElementById("model");
+      dl.innerHTML = "";
+      try {
+        const r = await api(`/models?provider=${encodeURIComponent(provSel.value)}`);
+        for (const m of r.models || []) dl.appendChild(el(`<option value="${esc(m)}"></option>`));
+        model.placeholder = r.default ? `${r.default} (default)` : "provider default";
+      } catch { /* leave free-text */ }
+    }
     const refresh = () => {
       const p = meta();
       document.getElementById("pnote").textContent = p.notes || "";
       document.getElementById("keyrow").style.display = p.needs_key ? "block" : "none";
+      loadModels();
     };
     provSel.onchange = refresh; refresh();
     const msg = (html) => (document.getElementById("stmsg").innerHTML = html);

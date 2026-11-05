@@ -107,12 +107,29 @@ def create_app(
     def post_settings(body: SettingsUpdate):
         return settings_mod.save_config(body.model_dump(exclude_none=True))
 
+    @app.get("/models", dependencies=[Depends(auth)])
+    def models(provider: str):
+        """Available models for a provider — to populate the model selector.
+        Local (Ollama): installed models. Cloud: live /models if a key is stored."""
+        preset = PRESETS.get(provider)
+        if preset is None:
+            raise HTTPException(400, f"unknown provider '{provider}'")
+        if provider == "ollama":
+            return {"models": ollama_helper.status().get("models", []),
+                    "default": preset.default_model}
+        key = settings_mod.get_api_key(provider) if preset.needs_key else None
+        found = list_models(config_from_preset(provider, api_key=key)) if (key or not preset.needs_key) else []
+        return {"models": found, "default": preset.default_model}
+
     # ----- API keys (write-only; never returned) --------------------- #
     @app.post("/api-keys", dependencies=[Depends(auth)])
     def set_key(body: ApiKeyBody):
         if body.provider not in PRESETS:
             raise HTTPException(400, f"unknown provider '{body.provider}'")
-        settings_mod.set_api_key(body.provider, body.key)
+        try:
+            settings_mod.set_api_key(body.provider, body.key)
+        except settings_mod.KeyStoreError as exc:
+            raise HTTPException(503, str(exc))
         return {"provider": body.provider, "stored": True}
 
     @app.delete("/api-keys/{provider}", dependencies=[Depends(auth)])
@@ -130,7 +147,10 @@ def create_app(
         engine = build_engine(config_from_preset(body.provider, model=body.model, api_key=key))
         ok, detail = engine.health_check()
         if ok and body.store and key:
-            settings_mod.set_api_key(body.provider, key)
+            try:
+                settings_mod.set_api_key(body.provider, key)
+            except settings_mod.KeyStoreError as exc:
+                raise HTTPException(503, str(exc))
         return {"ok": ok, "detail": detail,
                 "models": list_models(engine.config) if ok else [],
                 "stored": bool(ok and body.store and key)}

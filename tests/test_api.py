@@ -97,6 +97,23 @@ def test_api_key_lifecycle():
     assert prov["openai"]["has_key"] is False
 
 
+def test_keystore_failure_returns_503():
+    # If the OS credential store is unavailable, storing a key must fail cleanly
+    # (503), not crash with a 500.
+    from bonechiling.data import settings as settings_mod
+    from keyring.errors import KeyringError
+
+    c = _client(_TMP / "ks.db")
+    orig = settings_mod.keyring.set_password
+    settings_mod.keyring.set_password = lambda *a, **k: (_ for _ in ()).throw(KeyringError("no backend"))
+    try:
+        r = c.post("/api-keys", headers=H, json={"provider": "openai", "key": "sk-x"})
+        assert r.status_code == 503, r.status_code
+        assert "credential store" in r.json()["detail"]
+    finally:
+        settings_mod.keyring.set_password = orig
+
+
 def test_engine_test_missing_key():
     c = _client(_TMP / "e.db")
     r = c.post("/engine-test", headers=H, json={"provider": "anthropic"})
@@ -182,6 +199,16 @@ def test_export_xlsx():
     assert ws.cell(2, 1).value == "SEED ALPHA", ws.cell(2, 1).value
     # reconciled hardware column populated
     assert "plate" in str(ws.cell(2, 7).value).lower(), ws.cell(2, 7).value
+
+
+def test_models_endpoint():
+    c = _client(_TMP / "models.db")
+    r = c.get("/models?provider=ollama", headers=H)
+    assert r.status_code == 200
+    body = r.json()
+    assert "models" in body and isinstance(body["models"], list)
+    assert body["default"]  # preset default present
+    assert c.get("/models?provider=bogus", headers=H).status_code == 400
 
 
 def test_ollama_status_shape():

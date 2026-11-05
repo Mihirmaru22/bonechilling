@@ -97,6 +97,32 @@ credential store (never in a file).
 for t in tests/test_*.py; do python "$t"; done
 ```
 
+## Known limitations & roadmap
+
+Honest about where it's weak and what to improve next:
+
+- **Name/demographics accuracy on photos is the main gap.** For phone photos of
+  films, OCR (Tesseract) and small local models both misread labels (e.g.
+  `JAYANTIBHAI SOLANKI` → `I SOLANKI`, or no name → the folder name). Mitigations
+  in place: film-detection + crop, OCR-vs-model cross-check, and keeping the most
+  complete reading across a patient's films. Biggest further wins: a stronger OCR
+  backend (RapidOCR, interface already present) and routing low-confidence label
+  reads to a cloud model. Cloud providers already read these labels far better.
+- **Folder = patient.** A folder mixing two patients would merge them; a patient
+  split across folders would appear twice. Label conflicts are flagged per film.
+- **Film-detection is not a net OCR win on its own** (helps some photos, hurts
+  others); the pipeline keeps the better of raw-vs-crop. Could be refined to
+  deskew-only.
+- **Eval labels are bootstrap, not human-verified** — replace with real reviews.
+- **Gemini via the OpenAI-compat endpoint** may reject `response_format:
+  json_object`; if so the schema-repair fallback still parses most responses.
+- **Not verifiable from macOS:** the Windows `.exe`/installer (built in CI) and
+  the live pywebview window (the backend + SPA are verified via a browser).
+- **Scale:** the Excel export and job event log are built in-memory — fine for
+  typical worklists, not tuned for tens of thousands of patients.
+
+Testing: `for t in tests/test_*.py; do python "$t"; done` (46 tests).
+
 ## Medical disclaimer
 
 BoneChilling is an assistive workflow tool. Extracted facts and AI output must

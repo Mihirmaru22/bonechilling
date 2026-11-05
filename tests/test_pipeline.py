@@ -45,6 +45,17 @@ def test_discover_folders():
     assert {"1", "2", "3", "4"}.issubset(names), names
 
 
+def test_collect_demographics_prefers_complete_name():
+    # Two films of one folder: a truncated OCR miss and the full name.
+    acc = {}
+    runner._collect_demographics(acc, {"crosscheck": {"name": {"value": "I SOLANKI", "status": "ocr_only"}}})
+    runner._collect_demographics(acc, {"crosscheck": {"name": {"value": "JAYANTIBHAI SOLANKI", "status": "ocr_only"}}})
+    assert acc["name"] == "JAYANTIBHAI SOLANKI", acc
+    # a verified reading still wins even if shorter
+    runner._collect_demographics(acc, {"crosscheck": {"name": {"value": "J SOLANKI", "status": "verified"}}})
+    assert acc["name"] == "J SOLANKI", acc
+
+
 def test_should_escalate():
     good = _xray()
     cc_ok = {"name": type("A", (), {"status": "verified"})()}

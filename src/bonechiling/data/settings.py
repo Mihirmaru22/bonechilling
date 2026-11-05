@@ -67,8 +67,18 @@ def _entry(provider: str) -> str:
     return f"apikey:{provider}"
 
 
+class KeyStoreError(RuntimeError):
+    """The OS credential store is unavailable or rejected the write."""
+
+
 def set_api_key(provider: str, key: str) -> None:
-    keyring.set_password(SERVICE, _entry(provider), key)
+    try:
+        keyring.set_password(SERVICE, _entry(provider), key)
+    except KeyringError as exc:  # no backend / locked keychain
+        raise KeyStoreError(
+            "Could not save the key to the OS credential store. "
+            f"Ensure a keyring backend is available ({exc})."
+        ) from exc
 
 
 def get_api_key(provider: str) -> Optional[str]:

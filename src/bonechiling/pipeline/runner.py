@@ -116,12 +116,14 @@ def analyze_image(
     engine: VisionEngine,
     ocr_backend: str = "tesseract",
     escalation_engine: Optional[VisionEngine] = None,
+    precomputed_sha: Optional[str] = None,
 ) -> Dict:
     """Run the full per-image analysis. Returns a record dict for db.save_analysis.
-    Never raises — failures are captured in the record's `error`/limitations."""
+    Never raises — failures are captured in the record's `error`/limitations.
+    `precomputed_sha` avoids re-hashing a file already hashed for dedup."""
     rec: Dict = {
         "file_path": str(image_path.resolve()),
-        "file_sha256": sha256_file(image_path),
+        "file_sha256": precomputed_sha or sha256_file(image_path),
         "film_found": False,
         "raw_ocr": [],
         "source": "photo",
@@ -221,24 +223,30 @@ def process_folder(
     patient_id = db_mod.get_or_create_patient_for_folder(conn, str(folder.resolve()), folder.name)
 
     # Pre-filter + idempotency screening before spending model time.
-    todo: List[Path] = []
+    # Hash once here and reuse it in analyze_image (avoids reading each file twice).
+    todo: List[tuple] = []  # (path, sha)
+    seen_sha = set()
     for img in imgs:
-        if classify(img) == PrefilterVerdict.NON_XRAY:
+        # DICOM is never a "non-X-ray"; only screen photos with the heuristic.
+        if not dicom_mod.is_dicom(img) and classify(img) == PrefilterVerdict.NON_XRAY:
             _emit(progress, ProgressEvent("image_skipped", folder=folder.name, file=img.name,
                                           message="skipped: confident non-X-ray"))
             continue
-        if db_mod.image_exists(conn, sha256_file(img)):
+        sha = sha256_file(img)
+        if sha in seen_sha or db_mod.image_exists(conn, sha):
             _emit(progress, ProgressEvent("image_skipped", folder=folder.name, file=img.name,
                                           message="skipped: already ingested"))
             continue
-        todo.append(img)
+        seen_sha.add(sha)
+        todo.append((img, sha))
 
     # Cloud engines parallelize across images; local stays serial.
     if concurrency is None:
         concurrency = 1 if getattr(engine, "config", None) and engine.config.is_local else 4
 
-    def _work(img: Path) -> Dict:
-        return analyze_image(img, engine, ocr_backend, escalation_engine)
+    def _work(item: tuple) -> Dict:
+        img, sha = item
+        return analyze_image(img, engine, ocr_backend, escalation_engine, precomputed_sha=sha)
 
     records: List[Dict] = []
     if concurrency and concurrency > 1 and len(todo) > 1:
@@ -249,7 +257,7 @@ def process_folder(
 
     saved = 0
     best_demographics: Dict = {}
-    for img, rec in zip(todo, records):
+    for (img, _sha), rec in zip(todo, records):
         # The VLM's image_type is the final authority on whether to keep it.
         if rec["facts"].image_type == "Non-X-ray":
             _emit(progress, ProgressEvent("image_skipped", folder=folder.name, file=img.name,
@@ -298,19 +306,33 @@ def process_batch(
 
 
 # --------------------------------------------------------------------------- #
+_RANK = {"verified": 3, "vlm_only": 2, "ocr_only": 1}
+
+
 def _collect_demographics(acc: Dict, rec: Dict) -> None:
-    """Keep the best (verified > single-source) demographics seen for a folder."""
+    """Keep the best demographics seen across a folder's films.
+
+    Name: prefer a verified reading, then a longer (more complete) one — so a
+    folder where one film reads 'JAYANTIBHAI SOLANKI' and another reads
+    'I SOLANKI' keeps the full name, not the truncated OCR miss.
+    """
     cc = rec.get("crosscheck", {})
-    for field_name in ("name", "age", "sex"):
-        cur = cc.get(field_name, {})
-        val, status = cur.get("value"), cur.get("status")
-        if not val:
-            continue
-        # verified beats anything already set; otherwise fill only if empty.
-        if status == "verified" or field_name not in acc:
-            acc[field_name] = val
-    if "name" in acc:
-        acc["display_name"] = acc["name"]
+    # name with rank + length preference
+    cur = cc.get("name", {})
+    val, status = cur.get("value"), cur.get("status")
+    if val:
+        best = acc.get("_name_rank", (-1, -1))
+        cand = (_RANK.get(status, 0), len(str(val)))
+        if cand > best:
+            acc["name"] = val
+            acc["display_name"] = val
+            acc["_name_rank"] = cand
+    # age / sex: verified wins, else first non-empty
+    for field_name in ("age", "sex"):
+        c = cc.get(field_name, {})
+        v, s = c.get("value"), c.get("status")
+        if v and (s == "verified" or field_name not in acc):
+            acc[field_name] = v
 
 
 def _emit(progress: Optional[ProgressFn], event: ProgressEvent) -> None:

@@ -70,16 +70,19 @@ class OpenAICompatEngine:
                     resp = requests.post(self._endpoint(), headers=self._headers(),
                                          json=payload, timeout=self.config.timeout)
                     if resp.status_code == 429 or resp.status_code >= 500:
-                        last_err = f"HTTP {resp.status_code}: {resp.text[:200]}"
-                        time.sleep(min(2 ** attempt, 8))
-                        continue
-                    resp.raise_for_status()
-                    content = self._extract_content(resp.json())
-                    facts = repair_and_validate(content)
-                    return EngineResult(facts=facts, engine=name, latency_ms=t.elapsed_ms(),
-                                        raw_response=content)
+                        last_err = f"HTTP {resp.status_code}: {resp.text[:200]}"  # retryable
+                    elif resp.status_code >= 400:
+                        # client error (bad key / bad request) — retrying won't help
+                        return EngineResult(facts=repair_and_validate(None), engine=name,
+                                            latency_ms=t.elapsed_ms(),
+                                            error=f"HTTP {resp.status_code}: {resp.text[:200]}")
+                    else:
+                        content = self._extract_content(resp.json())
+                        return EngineResult(facts=repair_and_validate(content), engine=name,
+                                            latency_ms=t.elapsed_ms(), raw_response=content)
                 except requests.RequestException as exc:
                     last_err = str(exc)
+                if attempt < self.config.max_retries:
                     time.sleep(min(2 ** attempt, 8))
         return EngineResult(facts=repair_and_validate(None), engine=name,
                             latency_ms=t.elapsed_ms(), error=last_err or "unknown error")

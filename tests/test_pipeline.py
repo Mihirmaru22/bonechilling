@@ -1,4 +1,5 @@
 """End-to-end pipeline tests with a fake engine (no network) + temp DB."""
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -69,9 +70,11 @@ def test_should_escalate():
 
 
 def test_end_to_end_and_idempotency():
-    with tempfile.TemporaryDirectory() as tmp:
-        dbp = Path(tmp) / "t.db"
-        conn = db_mod.connect(dbp)
+    # Use an explicit temp DB path and close the connection in finally so Windows
+    # can delete the file (an open SQLite handle blocks temp-dir cleanup there).
+    tmp = tempfile.mkdtemp()
+    conn = db_mod.connect(Path(tmp) / "t.db")
+    try:
         eng = FakeEngine(_xray(label=LabelReading(name="TEST PERSON", sex="Male")))
 
         r1 = runner.process_batch([str(FOLDER)], eng, conn=conn)
@@ -82,7 +85,7 @@ def test_end_to_end_and_idempotency():
         patients = db_mod.list_patients(conn)
         assert len(patients) == 1, patients
         p = patients[0]
-        assert p["folder_path"].endswith("/1"), p["folder_path"]      # folder == identity
+        assert Path(p["folder_path"]).name == "1", p["folder_path"]    # folder == identity (OS-agnostic)
         assert p["image_count"] == r1["saved"], p
 
         imgs = db_mod.get_patient_images(conn, p["id"])
@@ -95,23 +98,22 @@ def test_end_to_end_and_idempotency():
         assert r2["saved"] == 0, f"idempotency broken: {r2}"
         assert eng.calls == first_calls, f"re-analyzed already-ingested images ({eng.calls} vs {first_calls})"
         assert len(db_mod.list_patients(conn)) == 1
-        conn.close()
         print(f"   ingested {r1['saved']} films, engine calls={first_calls}, re-run saved=0")
+    finally:
+        conn.close()
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def test_escalation_replaces_result():
-    with tempfile.TemporaryDirectory() as tmp:
-        conn = db_mod.connect(Path(tmp) / "t.db")
-        # local returns a validation-failure facts -> must escalate
-        local = FakeEngine(XrayFacts(image_type="Unknown", limitations=["schema validation failed"]),
-                           local=True, name="ollama:small")
-        cloud = FakeEngine(_xray(body_part="wrist"), local=False, name="openai:big")
-        img = sorted(FOLDER.glob("*.jpg"))[0]
-        rec = runner.analyze_image(img, local, escalation_engine=cloud)
-        assert cloud.calls == 1, "cloud escalation engine was not called"
-        assert "escalated" in rec["engine"], rec["engine"]
-        assert rec["facts"].body_part == "wrist", "escalated result not used"
-        conn.close()
+    # local returns a validation-failure facts -> must escalate (no DB needed)
+    local = FakeEngine(XrayFacts(image_type="Unknown", limitations=["schema validation failed"]),
+                       local=True, name="ollama:small")
+    cloud = FakeEngine(_xray(body_part="wrist"), local=False, name="openai:big")
+    img = sorted(FOLDER.glob("*.jpg"))[0]
+    rec = runner.analyze_image(img, local, escalation_engine=cloud)
+    assert cloud.calls == 1, "cloud escalation engine was not called"
+    assert "escalated" in rec["engine"], rec["engine"]
+    assert rec["facts"].body_part == "wrist", "escalated result not used"
 
 
 if __name__ == "__main__":

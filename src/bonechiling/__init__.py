@@ -1,2 +1,6 @@
+"""BoneChilling — bulk orthopedic X-ray fact extraction."""
+
+
 def main() -> None:
-    print("Hello from bonechiling!")
+    from .cli import main as _cli_main
+    raise SystemExit(_cli_main())

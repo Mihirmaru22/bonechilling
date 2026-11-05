@@ -1,0 +1,208 @@
+{
+  "note": "BOOTSTRAP labels auto-derived from a prior model run (eval_results.json). NOT human-verified ground truth \u2014 a doctor's verified reviews should replace these over time. Use as a regression baseline only.",
+  "source": "eval_results.json",
+  "labels": [
+    {
+      "file": "test/1/20251018_130343.jpg",
+      "image_type": "X-ray",
+      "name": "CHANDANBEN RATHOD",
+      "body_part": "femur",
+      "views": [
+        "AP",
+        "LAT"
+      ],
+      "hardware_present": false
+    },
+    {
+      "file": "test/1/20251018_130356.jpg",
+      "image_type": "X-ray",
+      "name": "CHANDANBEN RATHOD",
+      "body_part": "femur",
+      "views": [
+        "AP",
+        "LAT"
+      ],
+      "hardware_present": true
+    },
+    {
+      "file": "test/1/20251112_115443.jpg",
+      "image_type": "X-ray",
+      "name": "CHANDANBEN RATHOD",
+      "body_part": "femur",
+      "views": [
+        "AP",
+        "LAT"
+      ],
+      "hardware_present": true
+    },
+    {
+      "file": "test/2/20251018_135905.jpg",
+      "image_type": "X-ray",
+      "name": "JAYANTIBHAI SOLANKI",
+      "body_part": "femur",
+      "views": [
+        "AP",
+        "LAT"
+      ],
+      "hardware_present": true
+    },
+    {
+      "file": "test/2/20251018_135909.jpg",
+      "image_type": "X-ray",
+      "name": "JAYANTIBHAI SOLANKI",
+      "body_part": "femur",
+      "views": [
+        "AP",
+        "LAT"
+      ],
+      "hardware_present": true
+    },
+    {
+      "file": "test/2/20251129_173721.jpg",
+      "image_type": "X-ray",
+      "name": "JAYANTIBHAI SOLANKI",
+      "body_part": "femur",
+      "views": [
+        "AP",
+        "LAT"
+      ],
+      "hardware_present": true
+    },
+    {
+      "file": "test/2/20260311_125102.jpg",
+      "image_type": "X-ray",
+      "name": "JAYANTIBHAI SOLANKI",
+      "body_part": "Pelvis",
+      "views": [
+        "LAT",
+        "AP"
+      ],
+      "hardware_present": false
+    },
+    {
+      "file": "test/2/20260311_125117.jpg",
+      "image_type": "X-ray",
+      "name": "JAYANTIBHAI SOLANKI",
+      "body_part": "Pelvis",
+      "views": [
+        "AP"
+      ],
+      "hardware_present": false
+    },
+    {
+      "file": "test/3/20251221_111957.jpg",
+      "image_type": "X-ray",
+      "name": "KANAIYALAL DHINORA",
+      "body_part": "hip",
+      "views": [
+        "Anterior",
+        "Posterior"
+      ],
+      "hardware_present": true
+    },
+    {
+      "file": "test/3/20251221_112034.jpg",
+      "image_type": "X-ray",
+      "name": "KANAIYALAL DHINORA",
+      "body_part": "Pelvis",
+      "views": [
+        "AP"
+      ],
+      "hardware_present": false
+    },
+    {
+      "file": "test/3/20251221_112054.jpg",
+      "image_type": "X-ray",
+      "name": "KANAIYALAL DHINORA",
+      "body_part": "Lower Limb",
+      "views": [
+        "Anteroposterior (AP)"
+      ],
+      "hardware_present": true
+    },
+    {
+      "file": "test/3/20251221_112143.jpg",
+      "image_type": "X-ray",
+      "name": "KANAIYALAL DHINORA",
+      "body_part": "Hip",
+      "views": [
+        "Anteroposterior (AP)"
+      ],
+      "hardware_present": true
+    },
+    {
+      "file": "test/4/20250905_130040.jpg",
+      "image_type": "X-ray",
+      "name": "KARSHABHAI BHARVAD",
+      "body_part": "elbow",
+      "views": [
+        "AP",
+        "LAT"
+      ],
+      "hardware_present": true
+    },
+    {
+      "file": "test/4/20251004_103127.jpg",
+      "image_type": "X-ray",
+      "name": "KARSHABHAI BHARVAD",
+      "body_part": "Upper Arm",
+      "views": [
+        "AP"
+      ],
+      "hardware_present": false
+    },
+    {
+      "file": "test/4/20251004_103135.jpg",
+      "image_type": "X-ray",
+      "name": "KARSHABHAI BHARVAD",
+      "body_part": "Upper Arm",
+      "views": [
+        "AP"
+      ],
+      "hardware_present": false
+    },
+    {
+      "file": "test/4/20251004_103438.jpg",
+      "image_type": "X-ray",
+      "name": "KARSHABHAI BHARVAD",
+      "body_part": "Forearm & Elbow",
+      "views": [
+        "AP",
+        "LAT"
+      ],
+      "hardware_present": true
+    },
+    {
+      "file": "test/4/20260102_110246.jpg",
+      "image_type": "X-ray",
+      "name": "KARSHABHAI BHARVAD",
+      "body_part": "elbow",
+      "views": [
+        "AP",
+        "LAT"
+      ],
+      "hardware_present": true
+    },
+    {
+      "file": "test/4/20260102_110304.jpg",
+      "image_type": "X-ray",
+      "name": "KARSHABHAI BHARVAD",
+      "body_part": "Upper Arm",
+      "views": [
+        "AP"
+      ],
+      "hardware_present": false
+    },
+    {
+      "file": "test/4/20260102_110312.jpg",
+      "image_type": "X-ray",
+      "name": "KARSHABHAI BHARVAD",
+      "body_part": "Shoulder",
+      "views": [
+        "AP",
+        "Lateral"
+      ],
+      "hardware_present": false
+    }
+  ]
+}

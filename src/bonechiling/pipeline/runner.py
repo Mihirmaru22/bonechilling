@@ -1,0 +1,343 @@
+"""runner.py — headless batch ingestion orchestration.
+
+Replaces the old pipeline.py glue AND the analysis half of the Qt worker.py,
+with no Qt/UI dependency so it can be driven by a CLI, the FastAPI server, or a
+test. The vision engine is INJECTED (a VisionEngine), so the whole pipeline is
+testable with a fake engine and no network.
+
+Per-image flow:
+  sha256 -> (skip if already in DB) -> prefilter -> detect+straighten film ->
+  OCR best-of(raw photo, film crop) -> normalize -> VLM analyze(film crop) ->
+  cross-check OCR vs VLM label -> maybe escalate to cloud -> save.
+
+Patient identity is the folder (see data/db.get_or_create_patient_for_folder).
+"""
+from __future__ import annotations
+
+import hashlib
+import os
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Callable, Dict, List, Optional
+
+from ..core import dicom as dicom_mod
+from ..core import film as film_mod
+from ..core import ocr as ocr_mod
+from ..core.crosscheck import cross_check, has_conflicts
+from ..core.normalize import normalize
+from ..core.prefilter import PrefilterVerdict, classify
+from ..core.schema import XrayFacts
+from ..data import db as db_mod
+from ..engines.base import EngineResult, VisionEngine
+
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".dcm", ".dicom"}
+ProgressFn = Callable[["ProgressEvent"], None]
+
+
+@dataclass
+class ProgressEvent:
+    kind: str                      # folder_start|image_done|image_skipped|folder_done|batch_done
+    folder: Optional[str] = None
+    file: Optional[str] = None
+    done: int = 0
+    total: int = 0
+    message: str = ""
+    extra: Dict = field(default_factory=dict)
+
+
+# --------------------------------------------------------------------------- #
+# Discovery (ported from worker.discover_patient_folders)
+# --------------------------------------------------------------------------- #
+def discover_patient_folders(paths) -> List[Path]:
+    if isinstance(paths, (str, Path)):
+        paths = [paths]
+    found: List[Path] = []
+    seen = set()
+
+    def has_images(d: Path) -> bool:
+        return any(
+            f.suffix.lower() in IMAGE_EXTS
+            for f in d.iterdir()
+            if f.is_file() and not f.name.startswith(".")
+        )
+
+    def add(d: Path):
+        d = d.resolve()
+        if d not in seen and d.is_dir() and not d.name.startswith(".") and has_images(d):
+            seen.add(d)
+            found.append(d)
+
+    for item in paths:
+        p = Path(item).resolve()
+        if not p.exists():
+            continue
+        if p.is_file():
+            if p.suffix.lower() in IMAGE_EXTS:
+                add(p.parent)
+        else:
+            subdirs = [d for d in p.iterdir() if d.is_dir() and not d.name.startswith(".")]
+            if subdirs:
+                for root, dirs, files in os.walk(str(p)):
+                    dirs[:] = [d for d in dirs if not d.startswith(".") and d != "__MACOSX"]
+                    if any(Path(f).suffix.lower() in IMAGE_EXTS for f in files if not f.startswith(".")):
+                        add(Path(root))
+            elif has_images(p):
+                add(p)
+    return sorted(found, key=lambda x: str(x).lower())
+
+
+def sha256_file(path: Path, _buf: int = 1 << 20) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(_buf), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+# --------------------------------------------------------------------------- #
+# Escalation decision (real signals only — never self-reported confidence)
+# --------------------------------------------------------------------------- #
+def should_escalate(facts: XrayFacts, crosscheck: Dict, result: EngineResult) -> bool:
+    if result.error:
+        return True
+    if any("validation" in lim or "non-JSON" in lim for lim in facts.limitations):
+        return True
+    if has_conflicts(crosscheck):
+        return True
+    return False
+
+
+# --------------------------------------------------------------------------- #
+# Single image
+# --------------------------------------------------------------------------- #
+def analyze_image(
+    image_path: Path,
+    engine: VisionEngine,
+    ocr_backend: str = "tesseract",
+    escalation_engine: Optional[VisionEngine] = None,
+    precomputed_sha: Optional[str] = None,
+) -> Dict:
+    """Run the full per-image analysis. Returns a record dict for db.save_analysis.
+    Never raises — failures are captured in the record's `error`/limitations.
+    `precomputed_sha` avoids re-hashing a file already hashed for dedup."""
+    rec: Dict = {
+        "file_path": str(image_path.resolve()),
+        "file_sha256": precomputed_sha or sha256_file(image_path),
+        "film_found": False,
+        "raw_ocr": [],
+        "source": "photo",
+    }
+    norm = None
+    target = image_path
+
+    # 0. DICOM: render pixels + read demographics from tags (no OCR/film needed).
+    if dicom_mod.is_dicom(image_path):
+        study = dicom_mod.read_dicom(image_path)
+        if study is not None:
+            target = study.image
+            norm = study.norm
+            rec["source"] = "dicom"
+
+    # 1-2. Photo path: detect/straighten film, then OCR best-of(raw, crop).
+    if norm is None:
+        try:
+            det = film_mod.extract_film(image_path)
+            film_img, rec["film_found"] = det.image, det.found
+        except Exception:
+            film_img = None
+
+        def _ocr(src):
+            try:
+                lines, _ = ocr_mod.read_label(src, backend=ocr_backend)
+                return lines
+            except Exception:
+                return []
+
+        raw_lines = _ocr(image_path)
+        crop_lines = _ocr(film_img) if (film_img is not None and rec["film_found"]) else []
+        best_lines = crop_lines if _alnum(crop_lines) > _alnum(raw_lines) else raw_lines
+        rec["raw_ocr"] = best_lines
+        norm = normalize(best_lines)
+        target = film_img if (film_img is not None and rec["film_found"]) else image_path
+
+    rec["study_date"] = norm.get("study_date")
+
+    # 3. Vision engine on the chosen image (film crop, DICOM render, or raw).
+    result = engine.analyze(target)
+
+    # 4. Cross-check OCR demographics vs the VLM's label reading.
+    crosscheck = cross_check(norm, result.facts.label)
+
+    # 5. Escalate to cloud on real signals (validation fail / conflict / error).
+    escalated = False
+    if escalation_engine is not None and should_escalate(result.facts, crosscheck, result):
+        alt = escalation_engine.analyze(target)
+        if alt.ok:
+            result = alt
+            crosscheck = cross_check(norm, result.facts.label)
+            escalated = True
+
+    rec.update(
+        facts=result.facts,
+        crosscheck={k: _agree_dict(v) for k, v in crosscheck.items()},
+        engine=result.engine + ("+escalated" if escalated else ""),
+        model_name=result.engine.split(":", 1)[-1],
+        latency_ms=result.latency_ms,
+        error=result.error,
+        raw_response=result.raw_response,
+        norm=norm,
+    )
+    return rec
+
+
+def _alnum(lines: List[str]) -> int:
+    return sum(ch.isalnum() for ln in lines for ch in ln)
+
+
+def _agree_dict(a) -> Dict:
+    return {"ocr": a.ocr, "vlm": a.vlm, "status": a.status, "value": a.value}
+
+
+# --------------------------------------------------------------------------- #
+# Folder / batch
+# --------------------------------------------------------------------------- #
+def process_folder(
+    conn,
+    folder: Path,
+    engine: VisionEngine,
+    escalation_engine: Optional[VisionEngine] = None,
+    ocr_backend: str = "tesseract",
+    concurrency: Optional[int] = None,
+    progress: Optional[ProgressFn] = None,
+) -> int:
+    """Process one patient folder. Returns the count of newly saved images."""
+    folder = Path(folder)
+    imgs = sorted(
+        f for f in folder.iterdir()
+        if f.is_file() and not f.name.startswith(".") and f.suffix.lower() in IMAGE_EXTS
+    )
+    _emit(progress, ProgressEvent("folder_start", folder=folder.name, total=len(imgs),
+                                  message=f"Analyzing {folder.name} ({len(imgs)} files)"))
+
+    patient_id = db_mod.get_or_create_patient_for_folder(conn, str(folder.resolve()), folder.name)
+
+    # Pre-filter + idempotency screening before spending model time.
+    # Hash once here and reuse it in analyze_image (avoids reading each file twice).
+    todo: List[tuple] = []  # (path, sha)
+    seen_sha = set()
+    for img in imgs:
+        # DICOM is never a "non-X-ray"; only screen photos with the heuristic.
+        if not dicom_mod.is_dicom(img) and classify(img) == PrefilterVerdict.NON_XRAY:
+            _emit(progress, ProgressEvent("image_skipped", folder=folder.name, file=img.name,
+                                          message="skipped: confident non-X-ray"))
+            continue
+        sha = sha256_file(img)
+        if sha in seen_sha or db_mod.image_exists(conn, sha):
+            _emit(progress, ProgressEvent("image_skipped", folder=folder.name, file=img.name,
+                                          message="skipped: already ingested"))
+            continue
+        seen_sha.add(sha)
+        todo.append((img, sha))
+
+    # Cloud engines parallelize across images; local stays serial.
+    if concurrency is None:
+        concurrency = 1 if getattr(engine, "config", None) and engine.config.is_local else 4
+
+    def _work(item: tuple) -> Dict:
+        img, sha = item
+        return analyze_image(img, engine, ocr_backend, escalation_engine, precomputed_sha=sha)
+
+    records: List[Dict] = []
+    if concurrency and concurrency > 1 and len(todo) > 1:
+        with ThreadPoolExecutor(max_workers=concurrency) as pool:
+            records = list(pool.map(_work, todo))
+    else:
+        records = [_work(img) for img in todo]
+
+    saved = 0
+    best_demographics: Dict = {}
+    for (img, _sha), rec in zip(todo, records):
+        # The VLM's image_type is the final authority on whether to keep it.
+        if rec["facts"].image_type == "Non-X-ray":
+            _emit(progress, ProgressEvent("image_skipped", folder=folder.name, file=img.name,
+                                          message="skipped: VLM says non-X-ray"))
+            continue
+        if db_mod.save_analysis(conn, patient_id, rec) is not None:
+            saved += 1
+            _collect_demographics(best_demographics, rec)
+        _emit(progress, ProgressEvent("image_done", folder=folder.name, file=img.name,
+                                      message=rec["facts"].impression or "analyzed",
+                                      extra={"engine": rec["engine"]}))
+
+    if best_demographics:
+        db_mod.update_patient_demographics(conn, patient_id, **best_demographics)
+    _emit(progress, ProgressEvent("folder_done", folder=folder.name, done=saved, total=len(imgs),
+                                  message=f"{folder.name}: {saved} films saved"))
+    return saved
+
+
+def process_batch(
+    paths,
+    engine: VisionEngine,
+    db_path: Optional[Path] = None,
+    escalation_engine: Optional[VisionEngine] = None,
+    ocr_backend: str = "tesseract",
+    concurrency: Optional[int] = None,
+    progress: Optional[ProgressFn] = None,
+    conn=None,
+) -> Dict:
+    """Discover patient folders under `paths` and ingest them all."""
+    own_conn = conn is None
+    conn = conn or db_mod.connect(db_path)
+    folders = discover_patient_folders(paths)
+    total_saved = 0
+    try:
+        for i, folder in enumerate(folders, 1):
+            total_saved += process_folder(
+                conn, folder, engine, escalation_engine, ocr_backend, concurrency, progress
+            )
+        _emit(progress, ProgressEvent("batch_done", done=total_saved, total=len(folders),
+                                      message=f"Done: {len(folders)} folders, {total_saved} films"))
+    finally:
+        if own_conn:
+            conn.close()
+    return {"folders": len(folders), "saved": total_saved}
+
+
+# --------------------------------------------------------------------------- #
+_RANK = {"verified": 3, "vlm_only": 2, "ocr_only": 1}
+
+
+def _collect_demographics(acc: Dict, rec: Dict) -> None:
+    """Keep the best demographics seen across a folder's films.
+
+    Name: prefer a verified reading, then a longer (more complete) one — so a
+    folder where one film reads 'JAYANTIBHAI SOLANKI' and another reads
+    'I SOLANKI' keeps the full name, not the truncated OCR miss.
+    """
+    cc = rec.get("crosscheck", {})
+    # name with rank + length preference
+    cur = cc.get("name", {})
+    val, status = cur.get("value"), cur.get("status")
+    if val:
+        best = acc.get("_name_rank", (-1, -1))
+        cand = (_RANK.get(status, 0), len(str(val)))
+        if cand > best:
+            acc["name"] = val
+            acc["display_name"] = val
+            acc["_name_rank"] = cand
+    # age / sex: verified wins, else first non-empty
+    for field_name in ("age", "sex"):
+        c = cc.get(field_name, {})
+        v, s = c.get("value"), c.get("status")
+        if v and (s == "verified" or field_name not in acc):
+            acc[field_name] = v
+
+
+def _emit(progress: Optional[ProgressFn], event: ProgressEvent) -> None:
+    if progress:
+        try:
+            progress(event)
+        except Exception:
+            pass

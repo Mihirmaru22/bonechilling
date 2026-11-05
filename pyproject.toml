@@ -5,17 +5,25 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
-    "ollama>=0.6.2",
+    "fastapi>=0.128.8",
+    "keyring>=25.7.0",
+    "numpy>=1.26",
+    "opencv-python-headless>=5.0.0.93",
     "openpyxl>=3.1.5",
     "pillow>=11.3.0",
+    "pydantic>=2.7",
     "pydicom>=2.4.4",
     "pyside6>=6.10.3",
     "pytesseract>=0.3.13",
+    "pywebview>=6.2.1",
     "requests>=2.32.5",
+    "uvicorn>=0.39.0",
+    "websockets>=15.0.1",
 ]
 
 [project.scripts]
-bonechiling = "bonechiling:main"
+bonechiling = "bonechiling.cli:main"
+bonechilling = "bonechiling.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.12.13,<0.13.0"]

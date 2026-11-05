@@ -1,174 +1,129 @@
 # BoneChilling 🦴
-### High-Performance Orthopedic Radiology Workstation & AI Ingestion Pipeline
+### Bulk Orthopedic X-ray Reader — local or cloud AI, for clinicians
 
-**BoneChilling** is an intelligent desktop workstation and radiographic data ingestion pipeline designed for orthopedic surgeons and clinical radiologists. It streamlines the review, organization, and analysis of multi-projection X-ray studies (AP, Lateral, Oblique, etc.) by combining localized Optical Character Recognition (OCR), metadata normalization, local Vision-Language AI (`Qwen2.5-VL` via Ollama), and cross-projection implant reconciliation.
+**BoneChilling** reads a folder of patient X-ray studies in bulk and extracts
+objective radiographic facts (anatomy, projections, surgical hardware, alignment)
+plus patient demographics, into a reviewable worklist and an Excel export. It
+runs against a **local model (Ollama)** for privacy or any **cloud API**
+(OpenRouter, OpenAI, Gemini, Anthropic) for accuracy — the API key is entered
+from the app, no code editing. Objective facts only; every result is for a
+qualified physician to verify.
 
----
-
-## Key Highlights
-
-- **Desktop Workstation GUI**: Dark-mode clinical interface built with PySide6, featuring a multi-projection film canvas, interactive patient worklist, and unified clinical assessment inspector.
-- **Continuous Background Queue**: Asynchronous, multi-patient ingestion queue with Drag & Drop support for batch folders (50+ patient directories), real-time progress metrics, and a dedicated Queue Manager dialog.
-- **Fast Pre-Filter Heuristics**: Ultra-fast (~5ms) image classifier that filters out non-X-ray images (prescriptions, wound photographs, white paper documents) before burning CPU/GPU cycles.
-- **Targeted OCR & Normalization**: Tesseract-powered extraction focused on the bottom label band with 3x bilinear upscaling and autocontrast stretching, parsed into typed demographic and study fields.
-- **Objective Radiographic Fact Extraction**: Local Vision-Language Model (`qwen2.5vl:3b` / `7b` via Ollama) extracts verifiable radiographic findings (bone alignment, joint spaces, implant counts, integrity) without speculative diagnostic hallucination.
-- **Cross-Projection Hardware Reconciliation**: Correlates implants visible across orthogonal views (e.g., AP and Lateral) to prevent double-counting and verify multi-angle structural integrity.
-- **Surgeon Review & Verification Loop**: Status workflow (`unreviewed`, `verified`), editable findings overrides, clinical remarks logging, and audit timestamps.
-- **Spreadsheet Export with Hyperlinks**: Automated Excel export (`.xlsx`) featuring styled tables, clinical remarks, and clickable hyperlinks directly to patient folders on disk.
+> **v2 rewrite.** The app is now the `bonechiling` Python package under
+> [`src/bonechiling/`](src/bonechiling/). The original flat scripts + PySide6 app
+> are archived in [`legacy/`](legacy/).
 
 ---
 
-## Architecture & Data Flow
-
-```mermaid
-flowchart TD
-    A[Image / Patient Folder Drop] --> B[Folder Scanner & Ingestion Queue]
-    B --> C{Fast Non-X-ray Pre-Filter}
-    C -- Non-X-ray Photo/Doc --> D[Silently Skip / Log]
-    C -- Likely Radiograph --> E[Targeted OCR on Film Band]
-    E --> F[Demographic & Study Normalizer]
-    C -- Likely Radiograph --> G[Vision-Language Model: Qwen2.5-VL]
-    F & G --> H[SQLite DB Ingestion: patients, images, findings]
-    H --> I[Cross-Projection Hardware Reconciler]
-    I --> J[Workstation GUI: Study Viewer & Summary Table]
-    J --> K[Surgeon Review & Override Dialog]
-    J --> L[Excel Export with Clickable Links]
-```
-
----
-
-## Project Structure
+## Architecture
 
 ```
-BoneChiling/
-├── main.py                  # Workstation application entry point (PySide6)
-├── import_page.py           # Core GUI: Study Viewer, Summary Table, Queue Manager, Edit Dialog
-├── worker.py                # Asynchronous QThread background ingestion queue & folder discovery
-├── pipeline.py              # CLI batch ingestion runner
-├── vision.py                # Ollama Qwen2.5-VL vision analysis & fast non-X-ray heuristic filter
-├── ocr.py                   # Tesseract label-band reader with bilinear upscaling & autocontrast
-├── normalize.py             # Regex engine converting messy OCR text to structured clinical fields
-├── db.py                    # SQLite database schema, WAL configuration, queries & hardware reconciler
-├── evaluate_test_batch.py   # Benchmark test suite for timing and accuracy evaluation
-├── eval_results.json        # Detailed metrics and timing outputs from batch runs
-├── pyproject.toml           # Project dependencies and packaging configuration
-├── data/                    # Sample X-ray images
-└── test/                    # Multi-patient evaluation batch folders
+Folder(s) of patient studies
+   └── per image:  sha256 (idempotent)  →  prefilter / DICOM detect
+                   →  find & straighten film (OpenCV)  →  OCR label (best of raw/crop)
+                   →  Vision model (local or cloud) → objective facts (JSON schema)
+                   →  OCR-vs-model cross-check  →  escalate to cloud on conflict
+                   →  SQLite (folder = patient, full provenance)
+   →  cross-projection hardware reconcile  →  Worklist / Review / Excel export
 ```
 
----
+- **`core/`** — schema (typed contract), prompts, prefilter, film detection,
+  OCR, normalize, cross-check, DICOM, reconcile.
+- **`engines/`** — one OpenAI-compatible adapter (OpenAI/OpenRouter/Gemini/Ollama)
+  + a native Anthropic adapter; registry of provider presets.
+- **`pipeline/`** — headless batch runner (idempotent, concurrent for cloud).
+- **`data/`** — SQLite + migrations, keyring-backed settings, Excel export.
+- **`api/`** — FastAPI backend (token-authed) + background jobs + progress WebSocket.
+- **`webui/`** — no-build static SPA (worklist, patient review, ingest, settings).
+- **`desktop/`** — pywebview window wrapping the API + SPA as one app.
+- **`eval/`** — accuracy harness scoring extraction against labels.
 
 ## Prerequisites
 
-1. **Python 3.9+** (Python 3.11 or 3.12 recommended)
-2. **Tesseract OCR Engine**:
-   - **macOS** (Homebrew):
-     ```bash
-     brew install tesseract
-     ```
-   - **Ubuntu / Debian**:
-     ```bash
-     sudo apt-get update && sudo apt-get install -y tesseract-ocr
-     ```
-   - **Windows**: Install via [UB-Mannheim Tesseract installer](https://github.com/UB-Mannheim/tesseract/wiki) and ensure `tesseract` is added to your system `PATH`.
-3. **Ollama** (for local vision AI inference):
-   - Install Ollama from [ollama.ai](https://ollama.ai) or via Homebrew (`brew install ollama`).
-   - Pull the recommended vision model:
-     ```bash
-     ollama pull qwen2.5vl:3b
-     # Or for machines with >= 16GB RAM/VRAM:
-     # ollama pull qwen2.5vl:7b
-     ```
-   - Ensure the Ollama daemon is running:
-     ```bash
-     ollama serve
-     ```
+- **Python 3.9+**
+- **Tesseract** (optional, for label OCR on photos) — `brew install tesseract`
+  / UB-Mannheim installer on Windows (auto-detected).
+- For local AI: **[Ollama](https://ollama.com)** running a vision model, e.g.
+  `ollama pull qwen2.5vl:3b`. For cloud AI: an API key from your provider.
 
----
+## Install & run
 
-## Installation
-
-Using [`uv`](https://github.com/astral-sh/uv) (recommended) or standard `pip`:
-
-### Using `uv`
 ```bash
-# Clone the repository
-git clone <repo-url>
-cd BoneChiling
-
-# Create virtual environment and sync dependencies
-uv sync
+uv sync    # or: pip install -e .
 ```
 
-### Using `pip`
+Launch the desktop app (starts the backend + opens the window):
+
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -e .
+uv run bonechilling app
 ```
 
----
+Or run headless:
 
-## Usage
-
-### 1. Launching the Workstation GUI
 ```bash
-python main.py
-```
-- **Study Viewer**: Browse patients from the left worklist, switch between multiple projections (AP, Lateral, Oblique) using the top pill bar, inspect AI findings, and record surgeon notes.
-- **Summary Table**: View consolidated patient records, filter by name/anatomy/implant, and double-click any row to inspect the full case.
-- **Drag & Drop Ingestion**: Drag patient folders or a multi-folder batch root directly onto the window.
-- **Queue Manager**: Click `● Queue` in the top bar to inspect queued folders, pause/resume processing, or clear the queue.
-- **Excel Export**: Click `📊 Download Excel Sheet` to generate a styled report with clickable links to local patient folders.
-
-### 2. Running Batch Ingestion via CLI
-Ingest any patient directory directly into the SQLite database without launching the GUI:
-```bash
-python pipeline.py path/to/patient_or_batch_folder
+uv run bonechilling serve                 # API only (127.0.0.1)
+uv run bonechilling ingest /path/to/batch --provider ollama
+uv run bonechilling ingest /path/to/batch --provider openrouter --model google/gemini-2.0-flash-001
+uv run bonechilling eval eval/labels.json --provider ollama
+uv run bonechilling engine-test --provider openai
 ```
 
-### 3. Running Component Self-Tests
+Cloud keys come from `--api-key`, the provider env var (e.g. `OPENAI_API_KEY`),
+or — in the app — the **Settings** screen, which stores them in your OS
+credential store (never in a file).
 
-- **Test OCR on an X-ray**:
-  ```bash
-  python ocr.py data/elbow1.jpg
-  ```
-- **Test Demographics Normalization**:
-  ```bash
-  python normalize.py data/elbow1.jpg
-  ```
-- **Test Vision Fact Extraction**:
-  ```bash
-  python vision.py data/elbow1.jpg
-  ```
-- **Run Batch Evaluation**:
-  ```bash
-  python evaluate_test_batch.py
-  ```
+## Accuracy approach
 
----
+- Strict JSON schema with tolerant repair; one bounded re-ask on failure.
+- Film detection + straighten so the model/OCR see the film, not the whole photo.
+- OCR and the vision model both read the label; **agreement = verified,
+  disagreement = flagged**, and disagreement/validation-failure **escalates** a
+  single image from local to cloud (never self-reported confidence).
+- `eval/harness.py` measures per-field accuracy vs labels so changes are proven.
+  Sample labels in `eval/labels.json` are a **bootstrap baseline, not
+  human-verified** — a doctor's verified reviews should replace them.
 
-## Database Architecture (`xray.db`)
+## Data & privacy
 
-The application uses an embedded SQLite database configured with **Write-Ahead Logging (WAL)** and foreign key enforcement for concurrent GUI reading and background worker writing.
+- Patient identity is the **folder** (not the OCR'd name); images are
+  deduplicated by SHA-256, so re-dropping a folder is safe.
+- The DB lives outside the repo (`~/.bonechilling`, or `$BONECHILLING_DB`).
+- Cloud providers send images off-device; the app shows a one-time notice.
+  DICOM is read tags-first (demographics from tags, no OCR needed).
 
-- **`patients`**: Stores consolidated patient demographics (`name`, `patient_id`, `age`, `sex`), `review_status` (`unreviewed`, `verified`), `surgeon_notes`, `verified_hardware`, and `verified_facts`.
-- **`images`**: Stores individual projection records (`file_path`, `study_date`, `body_part`, `views`, `raw_ocr`).
-- **`findings`**: Stores AI-extracted observations per image (`hardware`, `impression`, `confidence`).
+## Tests
 
----
+```bash
+for t in tests/test_*.py; do python "$t"; done
+```
 
-## Technical Details
+## Known limitations & roadmap
 
-### Orthogonal Hardware Reconciliation
-When multiple projections of the same anatomical region are captured (such as Anteroposterior and Lateral views), individual AI evaluations detect the same implants from different perspectives. BoneChilling's reconciliation engine (`reconcile_hardware_cross_projections`):
-1. Categorizes implants into standardized classes (plates, cortical/cancellous screws, K-wires, intramedullary nails, arthroplasty components).
-2. Maps anatomical locations (distal radius, olecranon, femoral neck, medial malleolus, etc.).
-3. Recognizes orthogonal projection pairs (`AP`/`PA` + `LAT`) to confirm implant presence without double-counting screw or plate totals.
-4. Formats human-readable clinical summaries (e.g. `1 Olecranon plate with 4 cortical screws (intact, confirmed on orthogonal AP/LAT views)`).
+Honest about where it's weak and what to improve next:
 
----
+- **Name/demographics accuracy on photos is the main gap.** For phone photos of
+  films, OCR (Tesseract) and small local models both misread labels (e.g.
+  `JAYANTIBHAI SOLANKI` → `I SOLANKI`, or no name → the folder name). Mitigations
+  in place: film-detection + crop, OCR-vs-model cross-check, and keeping the most
+  complete reading across a patient's films. Biggest further wins: a stronger OCR
+  backend (RapidOCR, interface already present) and routing low-confidence label
+  reads to a cloud model. Cloud providers already read these labels far better.
+- **Folder = patient.** A folder mixing two patients would merge them; a patient
+  split across folders would appear twice. Label conflicts are flagged per film.
+- **Film-detection is not a net OCR win on its own** (helps some photos, hurts
+  others); the pipeline keeps the better of raw-vs-crop. Could be refined to
+  deskew-only.
+- **Eval labels are bootstrap, not human-verified** — replace with real reviews.
+- **Gemini via the OpenAI-compat endpoint** may reject `response_format:
+  json_object`; if so the schema-repair fallback still parses most responses.
+- **Not verifiable from macOS:** the Windows `.exe`/installer (built in CI) and
+  the live pywebview window (the backend + SPA are verified via a browser).
+- **Scale:** the Excel export and job event log are built in-memory — fine for
+  typical worklists, not tuned for tens of thousands of patients.
 
-## Medical Disclaimer
+Testing: `for t in tests/test_*.py; do python "$t"; done` (46 tests).
 
-BoneChilling is intended as a clinical assistive workstation and workflow productivity tool. Extracted facts and AI-generated assessments are designed to assist the clinician's review and must always be verified by a qualified physician or radiologist.
+## Medical disclaimer
+
+BoneChilling is an assistive workflow tool. Extracted facts and AI output must
+always be verified by a qualified physician or radiologist.

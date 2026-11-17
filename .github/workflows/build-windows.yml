@@ -26,6 +26,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .
+          pip install --group dev   # test-only deps (httpx2 for starlette.testclient)
           pip install pyinstaller
 
       - name: Run tests

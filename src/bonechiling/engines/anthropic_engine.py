@@ -43,8 +43,10 @@ class AnthropicEngine:
 
         payload = {
             "model": self.config.model,
-            "max_tokens": 2048,   # radiographic JSON can be long; avoid truncation
-            "temperature": self.config.temperature,
+            # Current Claude models think before answering and that counts toward
+            # max_tokens, so leave generous room for the JSON. No temperature:
+            # current models reject sampling parameters with a 400.
+            "max_tokens": 16000,
             "system": SYSTEM_PROMPT + " Respond with only the JSON object.",
             "messages": [{
                 "role": "user",
@@ -91,7 +93,7 @@ class AnthropicEngine:
         url = self.config.base_url.rstrip("/") + "/v1/messages"
         try:
             resp = requests.post(url, headers=self._headers(),
-                                 json={"model": self.config.model, "max_tokens": 1,
+                                 json={"model": self.config.model, "max_tokens": 16,
                                        "messages": [{"role": "user", "content": "hi"}]},
                                  timeout=15)
             if resp.ok:

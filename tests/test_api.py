@@ -208,6 +208,7 @@ def test_models_endpoint():
     body = r.json()
     assert "models" in body and isinstance(body["models"], list)
     assert body["default"]  # preset default present
+    assert body["options"] and all({"id", "status", "group"} <= set(o) for o in body["options"])
     assert c.get("/models?provider=bogus", headers=H).status_code == 400
 
 

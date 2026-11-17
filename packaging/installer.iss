@@ -3,7 +3,9 @@
 ; Setup.exe. Build:  ISCC.exe packaging\installer.iss  (from the repo root)
 
 #define AppName "BoneChilling"
-#define AppVersion "0.2.0"
+#ifndef AppVersion
+  #define AppVersion "0.2.0"   ; release builds pass /DAppVersion=<tag version>
+#endif
 #define AppPublisher "BoneChilling"
 #define AppExe "BoneChilling.exe"
 

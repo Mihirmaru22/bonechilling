@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
+  workflow_call:            # reused by release.yml
+    inputs:
+      version:
+        description: "Version stamped into the installer (e.g. 0.2.1)"
+        type: string
+        required: false
+        default: ""
 
 jobs:
   build:
@@ -45,7 +52,10 @@ jobs:
 
       - name: Compile installer (Inno Setup)
         run: |
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" packaging\installer.iss
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if ("${{ inputs.version }}") { & $iscc "/DAppVersion=${{ inputs.version }}" packaging\installer.iss }
+          else { & $iscc packaging\installer.iss }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         shell: pwsh
 
       - name: Upload app folder

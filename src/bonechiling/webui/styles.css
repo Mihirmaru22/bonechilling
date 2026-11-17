@@ -315,6 +315,10 @@ textarea.mono { font-family: var(--f-mono); font-size: 13px; }
 .note { display: flex; gap: 10px; padding: 11px 14px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 var(--r) var(--r) 0; font-size: var(--t-s); margin-top: 14px; }
 .note svg { color: var(--accent); width: 16px; height: 16px; margin-top: 1px; }
 .note.warn { border-left-color: var(--warn); background: var(--warn-soft); } .note.warn svg { color: var(--warn); }
+.model-info { margin-top: 10px; font-size: var(--t-s); display: grid; gap: 4px; }
+.mi-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.mi-id { color: var(--ink); font-weight: 500; }
+.linkbtn { border: none; background: none; padding: 0; font: inherit; font-family: var(--f-mono); color: var(--accent); text-decoration: underline; cursor: pointer; }
 .status-msg { margin-top: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: var(--t-s); color: var(--ink-2); }
 
 /* ---------- toasts ---------- */

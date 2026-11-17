@@ -12,8 +12,9 @@ from typing import List, Optional
 
 import requests
 
-from .anthropic_engine import AnthropicEngine
+from .anthropic_engine import ANTHROPIC_VERSION, AnthropicEngine
 from .base import EngineConfig, VisionEngine
+from .catalog import looks_vision_capable
 from .openai_compat import OpenAICompatEngine
 
 
@@ -50,7 +51,7 @@ PRESETS: dict[str, ProviderPreset] = {
     ),
     "anthropic": ProviderPreset(
         "anthropic", "Anthropic (Claude)", "https://api.anthropic.com",
-        "claude-3-5-sonnet-latest", needs_key=True, adapter="anthropic",
+        "claude-opus-5-5", needs_key=True, adapter="anthropic",
     ),
 }
 
@@ -89,22 +90,51 @@ def build_engine(config: EngineConfig) -> VisionEngine:
     return OpenAICompatEngine(config)
 
 
-def list_models(config: EngineConfig) -> List[str]:
-    """Best-effort live model list from an OpenAI-compatible /models endpoint.
+def list_models(config: EngineConfig, vision_only: bool = True) -> List[str]:
+    """Best-effort live model list from the provider (empty list on any error).
 
-    Returns [] for Anthropic (no public list endpoint) or on any error; the UI
-    then falls back to the preset's default model.
+    With ``vision_only`` the list is narrowed to models that accept images:
+    OpenRouter reports input modalities; Anthropic models all take images;
+    OpenAI/Gemini have no modality field, so a name heuristic is used.
     """
-    if PRESETS.get(config.provider) and PRESETS[config.provider].adapter == "anthropic":
-        return []
-    url = config.base_url.rstrip("/") + "/models"
-    headers = {"Content-Type": "application/json"}
-    if config.api_key:
-        headers["Authorization"] = f"Bearer {config.api_key}"
+    preset = PRESETS.get(config.provider)
     try:
+        if preset and preset.adapter == "anthropic":
+            ids: List[str] = []
+            url = config.base_url.rstrip("/") + "/v1/models"
+            headers = {"x-api-key": config.api_key or "", "anthropic-version": ANTHROPIC_VERSION}
+            params = {"limit": 100}
+            for _ in range(10):  # paginate
+                resp = requests.get(url, headers=headers, params=params, timeout=15)
+                resp.raise_for_status()
+                body = resp.json()
+                ids += [m.get("id", "") for m in body.get("data", []) if m.get("id")]
+                if not body.get("has_more"):
+                    break
+                params["after_id"] = body.get("last_id")
+            return sorted(set(ids))
+
+        url = config.base_url.rstrip("/") + "/models"
+        headers = {"Content-Type": "application/json"}
+        if config.api_key:
+            headers["Authorization"] = f"Bearer {config.api_key}"
         resp = requests.get(url, headers=headers, timeout=15)
         resp.raise_for_status()
         data = resp.json().get("data", [])
-        return sorted(m.get("id", "") for m in data if m.get("id"))
     except (requests.RequestException, ValueError, AttributeError):
         return []
+
+    out = []
+    for m in data:
+        mid = (m.get("id") or "").removeprefix("models/")
+        if not mid:
+            continue
+        if vision_only:
+            mods = ((m.get("architecture") or {}).get("input_modalities"))
+            if mods is not None:
+                if "image" not in mods:
+                    continue
+            elif not looks_vision_capable(config.provider, mid):
+                continue
+        out.append(mid)
+    return sorted(set(out))

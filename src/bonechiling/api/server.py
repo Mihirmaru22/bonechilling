@@ -21,6 +21,7 @@ from ..core.reconcile import reconcile_patient_images
 from ..data import db as db_mod
 from ..data import export as export_mod
 from ..data import settings as settings_mod
+from ..engines.catalog import build_options
 from ..engines.registry import PRESETS, build_engine, config_from_preset, list_models
 from . import ollama_helper
 from .jobs import JobManager
@@ -115,11 +116,13 @@ def create_app(
         if preset is None:
             raise HTTPException(400, f"unknown provider '{provider}'")
         if provider == "ollama":
-            return {"models": ollama_helper.status().get("models", []),
-                    "default": preset.default_model}
+            installed = ollama_helper.status().get("models", [])
+            return {"models": installed, "default": preset.default_model,
+                    "options": build_options("ollama", None, installed), "verified": True}
         key = settings_mod.get_api_key(provider) if preset.needs_key else None
         found = list_models(config_from_preset(provider, api_key=key)) if (key or not preset.needs_key) else []
-        return {"models": found, "default": preset.default_model}
+        return {"models": found, "default": preset.default_model,
+                "options": build_options(provider, found), "verified": bool(found)}
 
     # ----- API keys (write-only; never returned) --------------------- #
     @app.post("/api-keys", dependencies=[Depends(auth)])

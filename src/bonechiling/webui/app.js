@@ -505,63 +505,138 @@ views.settings = async () => {
     const [providers, cfg] = await Promise.all([api("/providers"), api("/settings")]);
     const st = $("#st");
     st.innerHTML = `
-      <div class="field-row">
-        <div>
-          <label for="prov">Provider</label>
-          <select id="prov">${providers.map((p) => `<option value="${p.key}" ${p.key === cfg.provider ? "selected" : ""}>${esc(p.label)}${p.needs_key ? (p.has_key ? " (key saved)" : " (key needed)") : ""}</option>`).join("")}</select>
-        </div>
-        <div>
-          <label for="model">Model <span class="opt">(pick or type)</span></label>
-          <input id="model" list="modellist" value="${esc(cfg.model || "")}" placeholder="Provider default" autocomplete="off" />
-          <datalist id="modellist"></datalist>
-        </div>
-      </div>
+      <label for="prov">Provider</label>
+      <select id="prov">${providers.map((p) => `<option value="${p.key}" ${p.key === cfg.provider ? "selected" : ""}>${esc(p.label)}${p.needs_key ? (p.has_key ? " (key saved)" : " (key needed)") : ""}</option>`).join("")}</select>
       <div class="note">${icon("info")}<div id="pnote"></div></div>
       <div id="keyrow">
         <label for="key">API key <span class="opt">(stored in your OS credential store)</span></label>
         <input id="key" type="password" placeholder="Paste key, then Test connection" />
         <div class="hint" id="keyhint"></div>
       </div>
+      <label for="model">Vision model</label>
+      <select id="model"><option>Loading models…</option></select>
+      <div id="customRow" style="display:none">
+        <label for="modelCustom">Exact model name</label>
+        <input id="modelCustom" class="mono" list="modelKnown" autocomplete="off" spellcheck="false" placeholder="e.g. qwen2.5vl:7b" />
+        <datalist id="modelKnown"></datalist>
+      </div>
+      <div id="modelInfo" class="model-info"></div>
       <div class="btn-row">
         <button class="btn" id="save">${icon("check")} Save settings</button>
         <button class="btn secondary" id="test">${icon("key")} Test connection &amp; save key</button>
       </div>
       <div id="stmsg" class="status-msg" aria-live="polite"></div>`;
-    const provSel = $("#prov");
+    const provSel = $("#prov"), modelSel = $("#model"), custom = $("#modelCustom");
     const meta = () => providers.find((p) => p.key === provSel.value);
-    async function loadModels() {
-      const dl = $("#modellist"), model = $("#model");
-      dl.innerHTML = "";
-      try {
-        const r = await api(`/models?provider=${encodeURIComponent(provSel.value)}`);
-        for (const m of r.models || []) dl.appendChild(el(`<option value="${esc(m)}"></option>`));
-        model.placeholder = r.default ? `${r.default} (default)` : "Provider default";
-      } catch { /* leave free-text */ }
+    const CUSTOM = "__custom__";
+    let options = [], verified = false, defaultModel = "", pollTimer = null;
+    let wanted = cfg.provider === provSel.value ? (cfg.model || "") : "";
+
+    const currentModel = () => (modelSel.value === CUSTOM ? custom.value.trim() : modelSel.value) || null;
+    const statusBadgeFor = (o) => ({
+      installed: `<span class="badge ok">Installed</span>`,
+      download: `<span class="badge muted">Not downloaded</span>`,
+      available: `<span class="badge ok">Available on your account</span>`,
+      suggested: `<span class="badge muted">Not verified yet</span>`,
+    }[o.status] || "");
+
+    function renderInfo() {
+      const box = $("#modelInfo");
+      const id = currentModel();
+      $("#customRow").style.display = modelSel.value === CUSTOM ? "block" : "none";
+      if (!id) { box.innerHTML = `<span class="muted">Uses the provider default (<span class="mono">${esc(defaultModel)}</span>).</span>`; return; }
+      const o = options.find((x) => x.id === id);
+      if (o) {
+        const dl = provSel.value === "ollama" && o.status === "download";
+        box.innerHTML = `<div class="mi-row"><span class="mono mi-id">${esc(o.id)}</span>${statusBadgeFor(o)}${o.size ? `<span class="muted">~${esc(o.size)} download</span>` : ""}</div>
+          ${o.note ? `<div class="muted">${esc(o.note)}</div>` : ""}
+          ${dl ? `<div class="btn-row" style="margin-top:10px"><button class="btn secondary" id="pullSel">${icon("download")} Download ${esc(o.id)}</button><span class="muted" id="pullMsg">Needed before this model can read films.</span></div>` : ""}`;
+        const pb = $("#pullSel"); if (pb) pb.onclick = () => pullModel(o.id);
+        return;
+      }
+      // typed name that isn't in any list: warn, don't block
+      const near = options.filter((x) => x.id.replace(/[^a-z0-9]/gi, "").toLowerCase() === id.replace(/[^a-z0-9]/gi, "").toLowerCase());
+      const warn = near.length
+        ? `Did you mean <button class="linkbtn" id="useNear">${esc(near[0].id)}</button>? A small spelling difference stops the model from running.`
+        : provSel.value === "ollama"
+          ? "This name isn’t in the list or installed on this PC. Check the exact tag on ollama.com/library, then download it."
+          : verified ? "This model isn’t in the list your provider returned for your key. Check the exact ID." : "Can’t verify this name until a key is saved. Use Test connection to check it.";
+      box.innerHTML = `<div class="note warn" style="margin-top:0">${icon("alert")}<div>${warn}</div></div>
+        ${provSel.value === "ollama" ? `<div class="btn-row" style="margin-top:10px"><button class="btn secondary" id="pullSel">${icon("download")} Download ${esc(id)}</button><span class="muted" id="pullMsg"></span></div>` : ""}`;
+      const u = $("#useNear"); if (u) u.onclick = () => { modelSel.value = near[0].id; renderInfo(); };
+      const pb = $("#pullSel"); if (pb) pb.onclick = () => pullModel(id);
     }
+
+    async function loadModels() {
+      modelSel.innerHTML = `<option>Loading models…</option>`; modelSel.disabled = true;
+      let r;
+      try { r = await api(`/models?provider=${encodeURIComponent(provSel.value)}`); }
+      catch { r = { options: [], default: meta().default_model, verified: false }; }
+      options = r.options || []; verified = !!r.verified; defaultModel = r.default || "";
+      const groups = [];
+      for (const o of options) { let g = groups.find((x) => x.name === o.group); if (!g) groups.push(g = { name: o.group, items: [] }); g.items.push(o); }
+      const mark = { installed: " ✓ installed", download: "", available: "", suggested: "" };
+      modelSel.innerHTML = `<option value="">Provider default (${esc(defaultModel)})</option>` +
+        groups.map((g) => `<optgroup label="${esc(g.name)}">${g.items.map((o) =>
+          `<option value="${esc(o.id)}">${esc(o.label === o.id ? o.id : `${o.label} · ${o.id}`)}${o.size ? ` · ~${esc(o.size)}` : ""}${mark[o.status] || ""}</option>`).join("")}</optgroup>`).join("") +
+        `<option value="${CUSTOM}">Other model (type the exact name)…</option>`;
+      $("#modelKnown").innerHTML = options.map((o) => `<option value="${esc(o.id)}"></option>`).join("");
+      if (wanted && options.some((o) => o.id === wanted)) modelSel.value = wanted;
+      else if (wanted) { modelSel.value = CUSTOM; custom.value = wanted; }
+      else modelSel.value = "";
+      modelSel.disabled = false;
+      renderInfo();
+    }
+
+    async function pullModel(id) {
+      const pm = $("#pullMsg"), pb = $("#pullSel");
+      if (pb) pb.disabled = true;
+      try { await api("/ollama/pull", { method: "POST", json: { model: id } }); }
+      catch (e) { if (pm) pm.textContent = e.message; if (pb) pb.disabled = false; return; }
+      clearInterval(pollTimer);
+      pollTimer = setInterval(async () => {
+        let s; try { s = await api("/ollama/status"); } catch { return; }
+        const p = s.pull || {};
+        const m = $("#pullMsg");
+        if (!m) { clearInterval(pollTimer); return; }
+        m.textContent = p.line || "Downloading…";
+        if (!p.active) {
+          clearInterval(pollTimer);
+          if (p.error) { m.textContent = "Download failed: " + p.error + ". Check the model name."; const b = $("#pullSel"); if (b) b.disabled = false; }
+          else { toast(`${id} downloaded`, "ok"); wanted = id; loadModels(); loadOllama(); }
+        }
+      }, 1200);
+    }
+
     const refresh = () => {
       const p = meta();
       $("#pnote").textContent = p.notes || (p.needs_key ? "Cloud provider. Requires an API key." : "Runs locally. No API key required.");
       $("#keyrow").style.display = p.needs_key ? "block" : "none";
-      $("#keyhint").textContent = p.has_key ? "A key is already saved. Paste a new one only to replace it." : "";
+      $("#keyhint").textContent = p.has_key ? "A key is already saved. Paste a new one only to replace it." : "Save a key to see the exact models your account can use.";
       loadModels();
     };
-    provSel.onchange = refresh; refresh();
+    provSel.onchange = () => { wanted = provSel.value === cfg.provider ? (cfg.model || "") : ""; refresh(); };
+    modelSel.onchange = () => { if (modelSel.value === CUSTOM) { custom.value = ""; renderInfo(); custom.focus(); } else renderInfo(); };
+    custom.oninput = renderInfo;
+    refresh();
     const msg = (html) => ($("#stmsg").innerHTML = html);
     $("#save").onclick = async () => {
+      if (modelSel.value === CUSTOM && !custom.value.trim()) { toast("Type the model name, or pick one from the list.", "err"); custom.focus(); return; }
       try {
-        await api("/settings", { method: "POST", json: { provider: provSel.value, model: $("#model").value || null } });
+        await api("/settings", { method: "POST", json: { provider: provSel.value, model: currentModel() } });
+        cfg.provider = provSel.value; cfg.model = currentModel() || "";
         msg(""); toast("Settings saved", "ok");
       } catch (e) { msg(`<span class="badge err">Error</span> ${esc(e.message)}`); }
     };
     $("#test").onclick = async () => {
-      const body = { provider: provSel.value, model: $("#model").value || null, store: true };
+      const body = { provider: provSel.value, model: currentModel(), store: true };
       const k = $("#key").value; if (k) body.key = k;
       msg(`<span class="badge info">Testing…</span>`);
       try {
         const r = await api("/engine-test", { method: "POST", json: body });
         msg(r.ok ? `<span class="badge ok">Connected${r.stored ? " · key saved" : ""}</span> <span>${esc(r.detail)}</span>`
                  : `<span class="badge err">Failed</span> <span>${esc(r.detail)}</span>`);
-        if (r.ok && r.stored) { $("#key").value = ""; const p = meta(); if (p) p.has_key = true; refresh(); }
+        if (r.ok && r.stored) { $("#key").value = ""; const p = meta(); if (p) p.has_key = true; wanted = currentModel() || ""; refresh(); }
       } catch (e) { msg(`<span class="badge err">Error</span> ${esc(e.message)}`); }
     };
   } catch (e) { $("#st").innerHTML = errorBlock(e.message); }

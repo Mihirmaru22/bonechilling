@@ -19,7 +19,8 @@ hidden += [
 ]
 
 # Ship the SPA static files next to the package so server.py finds webui/.
-datas = [("src/bonechiling/webui", "bonechiling/webui")]
+datas = [("src/bonechiling/webui", "bonechiling/webui"),
+         ("src/bonechiling/engines/models.json", "bonechiling/engines")]
 datas += collect_data_files("pydicom")  # VR/dictionary data files
 
 a = Analysis(

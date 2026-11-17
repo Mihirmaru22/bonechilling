@@ -14,6 +14,8 @@ from typing import Union
 
 from PIL import Image, ImageStat
 
+from .imaging import open_image
+
 
 class PrefilterVerdict(str, Enum):
     XRAY = "xray"          # confidently radiograph-like
@@ -31,7 +33,7 @@ DARK_RATIO_MIN = 0.06      # radiographs have a meaningful dark region
 def classify(image_path: Union[str, Path]) -> PrefilterVerdict:
     """Return XRAY / NON_XRAY / MAYBE for a path. Never raises."""
     try:
-        with Image.open(image_path) as img:
+        with open_image(image_path) as img:
             rgb = img.convert("RGB")
             stat = ImageStat.Stat(rgb)
             r, g, b = stat.mean

@@ -16,7 +16,7 @@ import requests
 from ..core.imaging import encode_jpeg_b64
 from ..core.prompts import SYSTEM_PROMPT, USER_PROMPT
 from ..core.schema import repair_and_validate
-from .base import EngineConfig, EngineResult, _Timer
+from .base import EngineConfig, EngineResult, _Timer, explain_http_error
 
 ANTHROPIC_VERSION = "2023-06-01"
 
@@ -64,11 +64,11 @@ class AnthropicEngine:
                     resp = requests.post(url, headers=self._headers(), json=payload,
                                          timeout=self.config.timeout)
                     if resp.status_code == 429 or resp.status_code >= 500:
-                        last_err = f"HTTP {resp.status_code}: {resp.text[:200]}"  # retryable
+                        last_err = explain_http_error(resp.status_code, resp.text, self.config.model)  # retryable
                     elif resp.status_code >= 400:
                         return EngineResult(facts=repair_and_validate(None), engine=name,
                                             latency_ms=t.elapsed_ms(),
-                                            error=f"HTTP {resp.status_code}: {resp.text[:200]}")
+                                            error=explain_http_error(resp.status_code, resp.text, self.config.model))
                     else:
                         content = self._extract_content(resp.json())
                         return EngineResult(facts=repair_and_validate(content), engine=name,

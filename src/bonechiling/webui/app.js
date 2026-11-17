@@ -49,6 +49,14 @@ const ICONS = {
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   key: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  eyeOff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6C3.8 8.4 2 12 2 12s3.5 7 10 7a9.6 9.6 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
+  open: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5M9.5 13.5 12 11l2.5 2.5"/>',
+  close: '<path d="M6 6l12 12M18 6 6 18"/>',
+  prev: '<path d="m15 6-6 6 6 6"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+  monitor: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
 };
 const icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ""}</svg>`;
 
@@ -79,6 +87,91 @@ function countUp(node, to) {
   };
   requestAnimationFrame(step);
 }
+
+const filmSrc = (id, size = 640) => `/images/${id}/view?size=${size}&token=${encodeURIComponent(TOKEN)}`;
+
+// Full-screen film viewer: the lightbox. Arrows move between films, Esc closes.
+function openViewer(list, start, onReveal) {
+  let i = start;
+  const prev = document.activeElement;
+  const v = el(`<div class="viewer" role="dialog" aria-modal="true" aria-label="Film viewer">
+    <div class="viewer-bar"><span class="viewer-cap" id="vCap"></span>
+      <button class="btn secondary sm" id="vReveal">${icon("open")} Show in folder</button>
+      <button class="vbtn" id="vClose" aria-label="Close">${icon("close")}</button></div>
+    <div class="viewer-stage"><button class="vbtn vnav" id="vPrev" aria-label="Previous film">${icon("prev")}</button>
+      <img id="vImg" alt="" /><button class="vbtn vnav" id="vNext" aria-label="Next film">${icon("chevron")}</button></div>
+  </div>`);
+  const img = v.querySelector("#vImg");
+  const show = () => {
+    const f = list[i];
+    img.src = filmSrc(f.id, 2000); img.alt = `X-ray: ${f.title}`;
+    img.onerror = () => { img.alt = "Image file not found on this PC"; };
+    v.querySelector("#vCap").innerHTML = `<b>${esc(f.title)}</b> <span class="mono">${esc(f.file)}</span> <span class="muted">${i + 1} / ${list.length}</span>`;
+    v.querySelector("#vPrev").style.visibility = v.querySelector("#vNext").style.visibility = list.length > 1 ? "" : "hidden";
+  };
+  const close = () => { v.remove(); document.removeEventListener("keydown", key); prev && prev.focus && prev.focus(); };
+  const step = (d) => { i = (i + d + list.length) % list.length; show(); };
+  const key = (e) => { if (e.key === "Escape") close(); if (e.key === "ArrowRight") step(1); if (e.key === "ArrowLeft") step(-1); };
+  v.querySelector("#vClose").onclick = close;
+  v.querySelector("#vPrev").onclick = () => step(-1);
+  v.querySelector("#vNext").onclick = () => step(1);
+  v.querySelector("#vReveal").onclick = () => onReveal(list[i].id);
+  v.addEventListener("click", (e) => { if (e.target.classList.contains("viewer-stage")) close(); });
+  img.onclick = () => img.classList.toggle("zoom");
+  document.addEventListener("keydown", key);
+  document.body.appendChild(v);
+  show();
+  v.querySelector("#vClose").focus();
+}
+
+// Confirmation dialog (keyboard: Esc cancels, Enter confirms).
+function confirmDialog({ title, body, confirm = "Confirm", danger = false }) {
+  return new Promise((resolve) => {
+    const prev = document.activeElement;
+    const m = el(`<div class="modal-back" role="presentation"><div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="mTitle">
+      <h3 id="mTitle">${title}</h3><div class="modal-body">${body}</div>
+      <div class="btn-row"><button class="btn secondary" data-a="no">Cancel</button><button class="btn ${danger ? "danger" : ""}" data-a="yes">${confirm}</button></div>
+    </div></div>`);
+    const done = (v) => { m.remove(); document.removeEventListener("keydown", key); prev && prev.focus && prev.focus(); resolve(v); };
+    const key = (e) => { if (e.key === "Escape") done(false); };
+    m.addEventListener("click", (e) => { const a = e.target.closest("[data-a]"); if (a) done(a.dataset.a === "yes"); else if (e.target === m) done(false); });
+    document.addEventListener("keydown", key);
+    document.body.appendChild(m);
+    m.querySelector('[data-a="no"]').focus();
+  });
+}
+
+// Stream a job's events; calls onEvent for each and onEnd(status) once.
+function watchJob(jobId, { onEvent = () => {}, onEnd = () => {} } = {}) {
+  const ws = new WebSocket(`${location.origin.replace("http", "ws")}/ws/jobs/${jobId}?token=${encodeURIComponent(TOKEN)}`);
+  let ended = false;
+  ws.onmessage = (m) => {
+    const ev = JSON.parse(m.data);
+    if (ev.kind === "job_end") { ended = true; ws.close(); onEnd(ev.status); } else onEvent(ev);
+  };
+  ws.onclose = () => { if (!ended) { ended = true; onEnd("disconnected"); } };
+  return ws;
+}
+
+// ---- theme: system / light / dark (remembered per PC) --------------------- //
+const THEMES = [["system", "monitor", "System"], ["light", "sun", "Light"], ["dark", "moon", "Dark"]];
+function getTheme() { try { return localStorage.getItem("bc_theme") || "system"; } catch { return "system"; } }
+function setTheme(t) {
+  if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  try { localStorage.setItem("bc_theme", t); } catch { /* private mode: applies for this session only */ }
+  document.querySelectorAll(".theme-switch button").forEach((b) => b.setAttribute("aria-checked", b.dataset.theme === t));
+}
+function themeSwitch(container, withLabels = false) {
+  container.innerHTML = THEMES.map(([k, ic, label]) =>
+    `<button type="button" role="radio" data-theme="${k}" aria-checked="${getTheme() === k}" title="${label} theme" aria-label="${label} theme">${icon(ic)}${withLabels ? `<span>${label}</span>` : ""}</button>`).join("");
+  container.onclick = (e) => { const b = e.target.closest("button[data-theme]"); if (b) setTheme(b.dataset.theme); };
+  container.onkeydown = (e) => {
+    if (!["ArrowLeft", "ArrowRight"].includes(e.key)) return;
+    const i = THEMES.findIndex(([k]) => k === getTheme()), n = THEMES[(i + (e.key === "ArrowRight" ? 1 : 2)) % 3][0];
+    setTheme(n); container.querySelector(`[data-theme="${n}"]`).focus();
+  };
+}
+themeSwitch(document.getElementById("themeSwitch"));
 
 // ---- connection indicator ------------------------------------------------ //
 async function checkConn() {
@@ -256,8 +349,14 @@ views.patient = async (id) => {
           <span>FILMS <b>${pad2(imgs.length)}</b></span>
           <span id="heroBadge">${statusBadge(p.review_status)}</span>${errors ? `<span class="badge err">${errors} failed</span>` : ""}
         </div>
-        <div class="folder">${esc(p.folder_path || "")}</div>
+        <div class="folder-row"><span class="folder">${esc(p.folder_path || "")}</span>
+          <button class="btn secondary sm" id="openFolder">${icon("open")} Open folder</button></div>
     </header>
+
+    <div id="reStrip" class="re-strip" style="display:none" aria-live="polite">
+      <div class="re-top"><b id="reTitle">Re-analyzing…</b><span class="muted" id="reMsg"></span><button class="btn secondary sm" id="reCancel">Cancel</button></div>
+      <div class="progress"><div id="reBar"></div></div>
+    </div>
 
     ${conflicts ? `<div class="alert" role="alert">${icon("alert")}<div><b>Check the patient name.</b> The name printed on the film label disagrees with other sources on ${conflicts} film${conflicts > 1 ? "s" : ""}. Confirm identity before signing off.</div></div>` : ""}
 
@@ -284,6 +383,17 @@ views.patient = async (id) => {
             <div class="btn-row"><button class="btn" id="rsave">${icon("check")} Save sign-off</button></div>
           </div>
         </div>
+        <div class="panel">
+          <div class="panel-head"><div><h3>Correct this data</h3><p>If a film failed or was read wrongly</p></div></div>
+          <div class="panel-body">
+            <div class="fix-list">
+              ${errors ? `<button class="fix" id="fxFailed"><b>Retry failed films <span class="badge err">${errors}</span></b><small>Read the ${errors} film${errors > 1 ? "s" : ""} that failed again, with the current AI settings.</small></button>` : ""}
+              <button class="fix" id="fxAll"><b>Re-analyze all films</b><small>Discard these results and read every film in the folder again.</small></button>
+              <button class="fix danger" id="fxRemove"><b>Remove patient</b><small>Delete this patient and all results from BoneChilling.</small></button>
+            </div>
+            <p class="hint">Your image files are never changed or deleted. To fix one film, use the actions under that film.</p>
+          </div>
+        </div>
       </aside>
     </div>`;
 
@@ -305,9 +415,15 @@ views.patient = async (id) => {
     const status = img.error ? `<span class="badge err">Error</span>` : conflict ? `<span class="badge warn">Name conflict</span>` : `<span class="badge ok">Read OK</span>`;
     films.appendChild(el(`<article class="film ${cls}" style="--i:${i}">
       <div class="film-top">
-        ${lateralityMarker(img.laterality)}
-        <h4>${esc(img.body_part || "Unknown body part")}</h4>
-        <div class="views">${vws.length ? vws.map((v) => `<span class="chip">${esc(v)}</span>`).join("") : "No view detected"}</div>
+        <button class="film-img" data-idx="${i}" aria-label="View X-ray full screen">
+          <img loading="lazy" src="${filmSrc(img.id)}" alt="X-ray: ${esc(img.body_part || "film")}" onerror="this.parentNode.classList.add('missing');this.remove()" />
+          <span class="missing-msg">Image file not found on this PC</span>
+          ${lateralityMarker(img.laterality)}
+        </button>
+        <div class="film-cap">
+          <h4>${esc(img.body_part || "Unknown body part")}</h4>
+          <div class="views">${vws.length ? vws.map((v) => `<span class="chip">${esc(v)}</span>`).join("") : "No view detected"}</div>
+        </div>
         <span class="film-status" aria-hidden="true"></span>
       </div>
       ${img.error ? `<div class="film-sec film-err">${icon("alert")} ${esc(img.error)}</div>` : ""}
@@ -316,9 +432,77 @@ views.patient = async (id) => {
       <div class="film-sec"><div class="k">Hardware</div>${hwItems.length ? `<ul>${hwItems.map((h) => `<li>${esc(h.implant || h)}</li>`).join("")}</ul>` : `<span class="muted">None</span>`}</div>
       <div class="film-sec"><div class="k">Film label</div><div class="mono">${esc(nm.value || "—")}${img.study_date ? ` <span class="muted">· ${esc(img.study_date)}</span>` : ""}</div></div>
       <div class="film-foot"><span title="${esc(img.file_path || "")}">${esc(fileName || "film " + pad2(i + 1))}</span><span>${esc(img.engine_used || "")}</span></div>
+      <div class="film-actions">
+        <button class="act" data-act="reveal" data-id="${img.id}">Show file</button>
+        <button class="act" data-act="redo" data-id="${img.id}">${img.error ? "Retry" : "Re-analyze"}</button>
+        <button class="act danger" data-act="remove" data-id="${img.id}" data-name="${esc(fileName)}">Remove</button>
+      </div>
     </article>`));
   });
   films.classList.add("clip-in");   // signature: films clip onto the lightbox
+
+  // ---- corrections -------------------------------------------------------- //
+  const busy = (on) => pd.querySelectorAll(".fix, .act").forEach((b) => (b.disabled = on));
+  async function reanalyze(body, label) {
+    let r;
+    busy(true);
+    try { r = await api(`/patients/${id}/reanalyze`, { method: "POST", json: body }); }
+    catch (e) { busy(false); toast(e.message.replace(/^\d+: /, ""), "err"); return; }
+    const strip = $("#reStrip"), bar = $("#reBar"), msgEl = $("#reMsg");
+    strip.style.display = "block"; $("#reTitle").textContent = label;
+    let done = 0, failed = 0; const total = r.films_queued || 1;
+    msgEl.textContent = `0 of ${r.films_queued} films`;
+    $("#reCancel").onclick = () => api(`/jobs/${r.job_id}/cancel`, { method: "POST" }).catch(() => {});
+    watchJob(r.job_id, {
+      onEvent(ev) {
+        if (!strip.isConnected) return;
+        if (ev.kind === "queued") msgEl.textContent = ev.message;
+        if (ev.kind === "image_done" || ev.kind === "image_failed") {
+          done++; if (ev.kind === "image_failed") failed++;
+          msgEl.textContent = `${done} of ${r.films_queued} films${failed ? ` · ${failed} failed` : ""}`;
+          bar.style.width = Math.min(100, Math.round((done / total) * 100)) + "%";
+        }
+        if (ev.kind === "error") msgEl.textContent = ev.message;
+      },
+      onEnd(status) {
+        if (status === "completed") toast(failed ? `Finished with ${failed} failed film${failed > 1 ? "s" : ""}` : "Re-analysis complete", failed ? "err" : "ok");
+        else if (status === "cancelled") toast("Re-analysis cancelled. Films not yet read can be retried.", "");
+        else toast("Re-analysis stopped: " + status, "err");
+        if (document.getElementById("pd")) render("patient", id);
+      },
+    });
+  }
+  const fxF = $("#fxFailed");
+  if (fxF) fxF.onclick = () => reanalyze({ scope: "failed" }, "Retrying failed films");
+  $("#fxAll").onclick = async () => {
+    if (await confirmDialog({ title: "Re-analyze all films?", confirm: "Re-analyze all",
+      body: `<p>The current results for all ${imgs.length} films will be discarded and every film in the folder read again with the current AI settings.</p><p class="muted">Your sign-off is reset to “Awaiting review”. Notes are kept.</p>` }))
+      reanalyze({ scope: "all" }, "Re-analyzing all films");
+  };
+  $("#fxRemove").onclick = async () => {
+    if (!(await confirmDialog({ title: `Remove ${esc(name)}?`, confirm: "Remove patient", danger: true,
+      body: `<p>This deletes the patient, all ${imgs.length} film results and the sign-off notes from BoneChilling. It can’t be undone.</p><p class="muted">The image files in <span class="mono">${esc(p.folder_path || "")}</span> are not touched; you can ingest the folder again later.</p>` }))) return;
+    try { await api(`/patients/${id}`, { method: "DELETE" }); toast(`${name} removed`, "ok"); navigate("worklist"); }
+    catch (e) { toast(e.message, "err"); }
+  };
+  const viewList = imgs.map((im) => ({ id: im.id, title: [im.laterality, im.body_part].filter(Boolean).join(" ") || "Film",
+    file: String(im.file_path || "").split(/[\\/]/).pop() }));
+  const reveal = (imgId) => api(`/images/${imgId}/reveal`, { method: "POST" })
+    .then(() => toast("Opened in your file manager", "ok")).catch((e) => toast(e.message.replace(/^\d+: /, ""), "err"));
+  $("#openFolder").onclick = () => api(`/patients/${id}/open-folder`, { method: "POST" })
+    .then(() => toast("Folder opened", "ok")).catch((e) => toast(e.message.replace(/^\d+: /, ""), "err"));
+  films.onclick = async (e) => {
+    const fi = e.target.closest(".film-img");
+    if (fi && !fi.classList.contains("missing")) return openViewer(viewList, +fi.dataset.idx, reveal);
+    const b = e.target.closest(".act"); if (!b) return;
+    const imgId = +b.dataset.id;
+    if (b.dataset.act === "reveal") return reveal(imgId);
+    if (b.dataset.act === "redo") return reanalyze({ scope: "image", image_id: imgId }, "Re-analyzing film");
+    if (!(await confirmDialog({ title: "Remove this film?", confirm: "Remove film", danger: true,
+      body: `<p>The result for <span class="mono">${b.dataset.name}</span> is deleted from BoneChilling. The image file stays on disk.</p><p class="muted">If you ingest this folder again, the film will be read again.</p>` }))) return;
+    try { await api(`/images/${imgId}`, { method: "DELETE" }); toast("Film removed", "ok"); render("patient", id); }
+    catch (err) { toast(err.message, "err"); }
+  };
 
   $("#rsave").onclick = async () => {
     const btn = $("#rsave");
@@ -365,7 +549,7 @@ views.ingest = () => {
           </div>
         </div>
         <div class="panel" id="prog" style="display:none">
-          <div class="panel-head"><div><h3>Analysis</h3><p id="pstatus">Starting…</p></div><span id="pbadge" class="badge info">Running</span></div>
+          <div class="panel-head"><div><h3>Analysis</h3><p id="pstatus">Starting…</p></div><div class="mi-row"><span id="pbadge" class="badge info">Running</span><button class="btn secondary sm" id="pcancel">Cancel</button></div></div>
           <div class="panel-body">
             <div class="counters">
               <div><div class="v" id="sFolders">0</div><div class="k">Folders</div></div>
@@ -440,8 +624,15 @@ async function startIngest() {
     ingestRunning = false; btn.disabled = false;
     pbar.style.width = "100%";
     const ok = status === "completed";
-    pbadge.className = "badge " + (ok ? "ok" : "err"); pbadge.textContent = ok ? "Completed" : status;
-    pstatus.textContent = ok ? `Finished: ${c.saved} film${c.saved === 1 ? "" : "s"} saved across ${c.done} folder${c.done === 1 ? "" : "s"}.` : `Job ${status}.`;
+    $("#pcancel").style.display = "none";
+    const label = { completed: c.errors ? "Completed with errors" : "Completed", cancelled: "Cancelled", failed: "Failed" }[status] || status;
+    pbadge.className = "badge " + (ok && !c.errors ? "ok" : status === "cancelled" ? "muted" : ok ? "warn" : "err"); pbadge.textContent = label;
+    const filmsTxt = `${c.saved} film${c.saved === 1 ? "" : "s"} saved across ${c.done} folder${c.done === 1 ? "" : "s"}`;
+    pstatus.textContent =
+      status === "cancelled" ? `Cancelled. ${filmsTxt}; everything read so far is kept. Run it again to continue where it stopped.`
+      : status === "failed" ? "The analysis couldn’t start. See the log for the reason."
+      : c.errors ? `Finished: ${filmsTxt}. ${c.errors} problem${c.errors > 1 ? "s" : ""}: failed films are retried automatically when you run the folder again, or use “Retry failed films” on the patient page.`
+      : `Finished: ${filmsTxt}.`;
     $("#steps").innerHTML = steps(ok ? 2 : 1);
     $("#doneRow").style.display = "flex";
     $("#toWl").onclick = () => navigate("worklist");
@@ -452,6 +643,8 @@ async function startIngest() {
     ingestRunning = true;
     const { job_id } = await api("/ingest", { method: "POST", json: { paths } });
     pstatus.textContent = "Reading films…";
+    const pc = $("#pcancel"); pc.style.display = ""; pc.disabled = false;
+    pc.onclick = async () => { pc.disabled = true; pstatus.textContent = "Cancelling after the current film…"; try { await api(`/jobs/${job_id}/cancel`, { method: "POST" }); } catch {} };
     add(`Job ${job_id} started`);
     const ws = new WebSocket(`${location.origin.replace("http", "ws")}/ws/jobs/${job_id}?token=${encodeURIComponent(TOKEN)}`);
     ws.onmessage = (m) => {
@@ -462,6 +655,9 @@ async function startIngest() {
       }
       if (ev.kind === "folder_start") { c.folders++; pstatus.textContent = `Working on ${ev.folder}…`; add(`▸ ${ev.folder}: ${ev.message}`, "l-dir"); }
       else if (ev.kind === "image_done") { add(`  ✓ ${ev.file}: ${ev.message}`, "l-ok"); }
+      else if (ev.kind === "image_failed") { c.errors++; add(`  ✗ ${ev.file}: ${ev.message}`, "l-err"); }
+      else if (ev.kind === "image_retry") { add(`  ↻ ${ev.file}: ${ev.message}`, "l-skip"); }
+      else if (ev.kind === "queued") { pstatus.textContent = ev.message; add(ev.message, "l-skip"); }
       else if (ev.kind === "image_skipped") { c.skipped++; add(`  · ${ev.file}: ${ev.message}`, "l-skip"); }
       else if (ev.kind === "folder_done") {
         c.done++; c.saved += ev.done || 0;
@@ -492,6 +688,11 @@ views.settings = async () => {
     </section>
     <section class="set-section">
       <div class="no">03</div>
+      <div class="desc"><h3>Appearance</h3><p>System follows your computer’s light/dark setting.</p></div>
+      <div><div class="theme-switch on-surface" id="themeSwitch2" role="radiogroup" aria-label="Theme"></div></div>
+    </section>
+    <section class="set-section">
+      <div class="no">04</div>
       <div class="desc"><h3>Privacy &amp; safety</h3><p>How your data and keys are handled.</p></div>
       <ul class="tips">
         <li>${icon("check")}<span>Results are stored in a local database on this PC.</span></li>
@@ -500,6 +701,7 @@ views.settings = async () => {
       </ul>
     </section>
   </div>`));
+  themeSwitch($("#themeSwitch2"), true);
   loadOllama();
   try {
     const [providers, cfg] = await Promise.all([api("/providers"), api("/settings")]);
@@ -510,7 +712,10 @@ views.settings = async () => {
       <div class="note">${icon("info")}<div id="pnote"></div></div>
       <div id="keyrow">
         <label for="key">API key <span class="opt">(stored in your OS credential store)</span></label>
-        <input id="key" type="password" placeholder="Paste key, then Test connection" />
+        <div class="key-field">
+          <input id="key" type="password" placeholder="Paste key, then Test connection" autocomplete="off" spellcheck="false" />
+          <button class="eye" id="keyEye" type="button" aria-label="Show key" aria-pressed="false">${icon("eye")}</button>
+        </div>
         <div class="hint" id="keyhint"></div>
       </div>
       <label for="model">Vision model</label>
@@ -520,6 +725,7 @@ views.settings = async () => {
         <input id="modelCustom" class="mono" list="modelKnown" autocomplete="off" spellcheck="false" placeholder="e.g. qwen2.5vl:7b" />
         <datalist id="modelKnown"></datalist>
       </div>
+      <div id="savedWarn"></div>
       <div id="modelInfo" class="model-info"></div>
       <div class="btn-row">
         <button class="btn" id="save">${icon("check")} Save settings</button>
@@ -548,10 +754,13 @@ views.settings = async () => {
       const o = options.find((x) => x.id === id);
       if (o) {
         const dl = provSel.value === "ollama" && o.status === "download";
+        const life = o.lifecycle === "deprecated" || o.lifecycle === "retired"
+          ? `<div class="note warn" style="margin-top:6px">${icon("alert")}<div>This model ${o.lifecycle === "deprecated" ? "is being retired by the provider" : "has been retired"}.${o.replacement ? ` <button class="linkbtn" data-switch="${esc(o.replacement)}">Switch to ${esc(o.replacement)}</button>` : ""}</div></div>` : "";
         box.innerHTML = `<div class="mi-row"><span class="mono mi-id">${esc(o.id)}</span>${statusBadgeFor(o)}${o.size ? `<span class="muted">~${esc(o.size)} download</span>` : ""}</div>
-          ${o.note ? `<div class="muted">${esc(o.note)}</div>` : ""}
+          ${o.note ? `<div class="muted">${esc(o.note)}</div>` : ""}${life}
           ${dl ? `<div class="btn-row" style="margin-top:10px"><button class="btn secondary" id="pullSel">${icon("download")} Download ${esc(o.id)}</button><span class="muted" id="pullMsg">Needed before this model can read films.</span></div>` : ""}`;
         const pb = $("#pullSel"); if (pb) pb.onclick = () => pullModel(o.id);
+        box.querySelectorAll("[data-switch]").forEach((b) => (b.onclick = () => switchTo(b.dataset.switch)));
         return;
       }
       // typed name that isn't in any list: warn, don't block
@@ -567,18 +776,30 @@ views.settings = async () => {
       const pb = $("#pullSel"); if (pb) pb.onclick = () => pullModel(id);
     }
 
+    function switchTo(id) {
+      if (options.some((o) => o.id === id)) modelSel.value = id; else { modelSel.value = CUSTOM; custom.value = id; }
+      renderInfo(); toast(`Selected ${id}. Save settings to use it.`, "");
+    }
+    function renderSaved(sv) {
+      const box = $("#savedWarn");
+      if (!sv || !["missing", "deprecated", "retired"].includes(sv.state) || provSel.value !== cfg.provider) { box.innerHTML = ""; return; }
+      box.innerHTML = `<div class="note ${sv.state === "deprecated" ? "warn" : "err"}">${icon("alert")}<div><b>Your saved model needs attention.</b> ${esc(sv.message || "")}
+        ${sv.replacement ? ` <button class="linkbtn" id="useRep">Use ${esc(sv.replacement)}</button>` : " Pick another model below."}</div></div>`;
+      const u = $("#useRep"); if (u) u.onclick = () => switchTo(sv.replacement);
+    }
     async function loadModels() {
       modelSel.innerHTML = `<option>Loading models…</option>`; modelSel.disabled = true;
       let r;
       try { r = await api(`/models?provider=${encodeURIComponent(provSel.value)}`); }
       catch { r = { options: [], default: meta().default_model, verified: false }; }
       options = r.options || []; verified = !!r.verified; defaultModel = r.default || "";
+      renderSaved(r.saved);
       const groups = [];
       for (const o of options) { let g = groups.find((x) => x.name === o.group); if (!g) groups.push(g = { name: o.group, items: [] }); g.items.push(o); }
       const mark = { installed: " ✓ installed", download: "", available: "", suggested: "" };
       modelSel.innerHTML = `<option value="">Provider default (${esc(defaultModel)})</option>` +
         groups.map((g) => `<optgroup label="${esc(g.name)}">${g.items.map((o) =>
-          `<option value="${esc(o.id)}">${esc(o.label === o.id ? o.id : `${o.label} · ${o.id}`)}${o.size ? ` · ~${esc(o.size)}` : ""}${mark[o.status] || ""}</option>`).join("")}</optgroup>`).join("") +
+          `<option value="${esc(o.id)}">${esc(o.label === o.id ? o.id : `${o.label} · ${o.id}`)}${o.size ? ` · ~${esc(o.size)}` : ""}${mark[o.status] || ""}${o.lifecycle === "deprecated" ? " · retiring" : o.lifecycle === "retired" ? " · retired" : ""}</option>`).join("")}</optgroup>`).join("") +
         `<option value="${CUSTOM}">Other model (type the exact name)…</option>`;
       $("#modelKnown").innerHTML = options.map((o) => `<option value="${esc(o.id)}"></option>`).join("");
       if (wanted && options.some((o) => o.id === wanted)) modelSel.value = wanted;
@@ -608,11 +829,43 @@ views.settings = async () => {
       }, 1200);
     }
 
+    // Saved key: shown masked in the field; the eye fetches and reveals it.
+    const keyIn = $("#key"), eye = $("#keyEye");
+    let keyDirty = false, keyShown = false, savedMasked = "";
+    keyIn.oninput = () => { keyDirty = true; };
+    keyIn.onfocus = () => { if (!keyDirty && savedMasked && !keyShown) keyIn.select(); };
+    const setEye = (shown) => { keyShown = shown; keyIn.type = shown ? "text" : "password";
+      eye.innerHTML = icon(shown ? "eyeOff" : "eye"); eye.setAttribute("aria-pressed", shown); eye.setAttribute("aria-label", shown ? "Hide key" : "Show key"); };
+    eye.onclick = async () => {
+      if (keyShown) { setEye(false); if (!keyDirty && savedMasked) keyIn.value = savedMasked; return; }
+      if (!keyDirty && savedMasked) {
+        try { const r = await api(`/api-keys/${provSel.value}?reveal=true`); keyIn.value = r.key || ""; }
+        catch (e) { toast(e.message, "err"); return; }
+      }
+      setEye(true);
+    };
+    async function loadKey() {
+      const p = meta(); keyDirty = false; savedMasked = ""; setEye(false); keyIn.value = "";
+      if (!p.needs_key) return;
+      try {
+        const r = await api(`/api-keys/${p.key}`);
+        if (r.has_key) { savedMasked = r.masked; keyIn.value = r.masked; }
+        $("#keyhint").innerHTML = r.has_key
+          ? `Key saved in your OS credential store. Paste over it to replace it, or <button class="linkbtn" id="keyDel">remove it</button>.`
+          : "Save a key to see the exact models your account can use.";
+        const del = $("#keyDel");
+        if (del) del.onclick = async () => {
+          if (!(await confirmDialog({ title: "Remove saved key?", confirm: "Remove key", danger: true,
+            body: `<p>The ${esc(p.label)} key is deleted from your OS credential store. Analyses with this provider stop until a new key is saved.</p>` }))) return;
+          await api(`/api-keys/${p.key}`, { method: "DELETE" }); p.has_key = false; toast("Key removed", "ok"); refresh();
+        };
+      } catch { /* leave empty */ }
+    }
     const refresh = () => {
       const p = meta();
       $("#pnote").textContent = p.notes || (p.needs_key ? "Cloud provider. Requires an API key." : "Runs locally. No API key required.");
       $("#keyrow").style.display = p.needs_key ? "block" : "none";
-      $("#keyhint").textContent = p.has_key ? "A key is already saved. Paste a new one only to replace it." : "Save a key to see the exact models your account can use.";
+      loadKey();
       loadModels();
     };
     provSel.onchange = () => { wanted = provSel.value === cfg.provider ? (cfg.model || "") : ""; refresh(); };
@@ -630,13 +883,13 @@ views.settings = async () => {
     };
     $("#test").onclick = async () => {
       const body = { provider: provSel.value, model: currentModel(), store: true };
-      const k = $("#key").value; if (k) body.key = k;
+      const k = keyDirty ? keyIn.value.trim() : ""; if (k) body.key = k;
       msg(`<span class="badge info">Testing…</span>`);
       try {
         const r = await api("/engine-test", { method: "POST", json: body });
         msg(r.ok ? `<span class="badge ok">Connected${r.stored ? " · key saved" : ""}</span> <span>${esc(r.detail)}</span>`
                  : `<span class="badge err">Failed</span> <span>${esc(r.detail)}</span>`);
-        if (r.ok && r.stored) { $("#key").value = ""; const p = meta(); if (p) p.has_key = true; wanted = currentModel() || ""; refresh(); }
+        if (r.ok && r.stored) { const p = meta(); if (p) p.has_key = true; wanted = currentModel() || ""; refresh(); }
       } catch (e) { msg(`<span class="badge err">Error</span> ${esc(e.message)}`); }
     };
   } catch (e) { $("#st").innerHTML = errorBlock(e.message); }

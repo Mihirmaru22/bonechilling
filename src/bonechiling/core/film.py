@@ -26,6 +26,8 @@ from typing import Optional, Tuple, Union
 import numpy as np
 from PIL import Image
 
+from .imaging import open_image
+
 ImageOrPath = Union[str, Path, Image.Image]
 
 # A real film should occupy a decent chunk of the frame; below this we don't
@@ -79,7 +81,7 @@ def extract_film(image: ImageOrPath) -> FilmDetection:
     import cv2
 
     try:
-        pil = image if isinstance(image, Image.Image) else Image.open(image)
+        pil = image if isinstance(image, Image.Image) else open_image(image)
         pil = pil.convert("RGB")
     except Exception:
         # Can't even open it — hand back a blank; caller handles found=False.

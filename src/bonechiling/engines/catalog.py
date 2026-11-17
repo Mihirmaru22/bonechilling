@@ -12,65 +12,22 @@ a small mistake (``qwen2.5-vl`` vs ``qwen2.5vl``) that then fails on every film.
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
-# id, label, approx. download size, short note. Ordered by recommendation.
-OLLAMA_VISION: List[Dict[str, str]] = [
-    {"id": "qwen2.5vl:3b", "label": "Qwen2.5-VL 3B", "size": "3.2 GB", "note": "Recommended for laptops; reads film labels well"},
-    {"id": "qwen2.5vl:7b", "label": "Qwen2.5-VL 7B", "size": "6.0 GB", "note": "More accurate; needs ~8 GB RAM/VRAM"},
-    {"id": "qwen3-vl:2b", "label": "Qwen3-VL 2B", "size": "1.9 GB", "note": "Newest Qwen vision, smallest"},
-    {"id": "qwen3-vl:4b", "label": "Qwen3-VL 4B", "size": "3.3 GB", "note": "Newest Qwen vision, balanced"},
-    {"id": "qwen3-vl:8b", "label": "Qwen3-VL 8B", "size": "6.1 GB", "note": "Newest Qwen vision, most accurate under 15B"},
-    {"id": "gemma4:e2b", "label": "Gemma 4 E2B", "size": "7.2 GB", "note": "Google, efficient 2B-effective"},
-    {"id": "gemma4:e4b", "label": "Gemma 4 E4B", "size": "9.6 GB", "note": "Google, efficient 4B-effective"},
-    {"id": "gemma3:4b", "label": "Gemma 3 4B", "size": "3.3 GB", "note": "Google, fast"},
-    {"id": "gemma3:12b", "label": "Gemma 3 12B", "size": "8.1 GB", "note": "Google, strong general vision"},
-    {"id": "ministral-3:3b", "label": "Ministral 3 3B", "size": "3.0 GB", "note": "Mistral, small"},
-    {"id": "ministral-3:8b", "label": "Ministral 3 8B", "size": "6.0 GB", "note": "Mistral, balanced"},
-    {"id": "ministral-3:14b", "label": "Ministral 3 14B", "size": "9.1 GB", "note": "Mistral, largest under 15B"},
-    {"id": "llama3.2-vision:11b", "label": "Llama 3.2 Vision 11B", "size": "7.8 GB", "note": "Meta"},
-    {"id": "minicpm-v:8b", "label": "MiniCPM-V 8B", "size": "5.5 GB", "note": "Good at reading text in images"},
-    {"id": "granite3.2-vision:2b", "label": "Granite 3.2 Vision 2B", "size": "2.4 GB", "note": "IBM, document-focused"},
-    {"id": "llava:7b", "label": "LLaVA 7B", "size": "4.7 GB", "note": "Classic, widely tested"},
-    {"id": "llava:13b", "label": "LLaVA 13B", "size": "8.0 GB", "note": "Classic, larger"},
-    {"id": "llava-llama3:8b", "label": "LLaVA-Llama3 8B", "size": "5.5 GB", "note": "LLaVA on Llama 3"},
-    {"id": "llava-phi3:3.8b", "label": "LLaVA-Phi3 3.8B", "size": "2.9 GB", "note": "Small LLaVA"},
-    {"id": "moondream:1.8b", "label": "Moondream 1.8B", "size": "1.7 GB", "note": "Tiny; fastest, least accurate"},
-]
+# The list itself lives in models.json so it can be maintained without code
+# changes (see MAINTAINING_MODELS.md). status: current | deprecated | retired.
+_DATA = json.loads((Path(__file__).with_name("models.json")).read_text(encoding="utf-8"))
+OLLAMA_VISION: List[Dict[str, str]] = _DATA["ollama"]
+CLOUD_SUGGESTED: Dict[str, List[Dict[str, str]]] = _DATA["cloud"]
+CATALOG_UPDATED: str = _DATA.get("updated", "")
 
-# Shown before a key is saved; replaced by the provider's live list afterwards.
-CLOUD_SUGGESTED: Dict[str, List[Dict[str, str]]] = {
-    "anthropic": [
-        {"id": "claude-opus-5-5", "label": "Claude Opus 5.5", "note": "Most capable Opus; default"},
-        {"id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5", "note": "Fast and capable, lower cost"},
-        {"id": "claude-haiku-5-5", "label": "Claude Haiku 5.5", "note": "Cheapest and fastest"},
-        {"id": "claude-fable-5-2", "label": "Claude Fable 5.2", "note": "Most capable, highest cost"},
-        {"id": "claude-opus-5", "label": "Claude Opus 5", "note": "Previous Opus"},
-        {"id": "claude-sonnet-5", "label": "Claude Sonnet 5", "note": "Previous Sonnet"},
-    ],
-    "openai": [
-        {"id": "gpt-5", "label": "GPT-5", "note": ""},
-        {"id": "gpt-5-mini", "label": "GPT-5 mini", "note": "Lower cost"},
-        {"id": "gpt-4.1", "label": "GPT-4.1", "note": ""},
-        {"id": "gpt-4.1-mini", "label": "GPT-4.1 mini", "note": "Lower cost"},
-        {"id": "gpt-4o", "label": "GPT-4o", "note": ""},
-        {"id": "gpt-4o-mini", "label": "GPT-4o mini", "note": "Lowest cost"},
-    ],
-    "gemini": [
-        {"id": "gemini-2.5-flash", "label": "Gemini 2.5 Flash", "note": "Fast, good value"},
-        {"id": "gemini-2.5-flash-lite", "label": "Gemini 2.5 Flash-Lite", "note": "Cheapest"},
-        {"id": "gemini-2.5-pro", "label": "Gemini 2.5 Pro", "note": "Most accurate"},
-        {"id": "gemini-2.0-flash", "label": "Gemini 2.0 Flash", "note": "Older"},
-    ],
-    "openrouter": [
-        {"id": "google/gemini-2.5-flash", "label": "Gemini 2.5 Flash", "note": "Fast, good value"},
-        {"id": "google/gemini-2.0-flash-001", "label": "Gemini 2.0 Flash", "note": ""},
-        {"id": "anthropic/claude-sonnet-4.5", "label": "Claude Sonnet 4.5", "note": ""},
-        {"id": "openai/gpt-4o-mini", "label": "GPT-4o mini", "note": ""},
-        {"id": "qwen/qwen2.5-vl-72b-instruct", "label": "Qwen2.5-VL 72B", "note": ""},
-        {"id": "meta-llama/llama-3.2-11b-vision-instruct", "label": "Llama 3.2 11B Vision", "note": ""},
-    ],
-}
+
+def catalog_entry(provider: str, model_id: str) -> Optional[Dict[str, str]]:
+    items = OLLAMA_VISION if provider == "ollama" else CLOUD_SUGGESTED.get(provider, [])
+    return next((m for m in items if m["id"] == model_id), None)
+
 
 _NON_VISION_HINTS = ("embed", "embedding", "tts", "whisper", "transcribe", "audio", "realtime",
                      "moderation", "dall-e", "imagen", "image-", "aqa", "search", "davinci", "babbage")
@@ -103,7 +60,10 @@ def build_options(provider: str, live: Optional[Iterable[str]], installed: Itera
         for item in OLLAMA_VISION:
             known.add(item["id"])
             is_in = item["id"] in have or item["id"] in base
-            opts.append({**item, "group": "Vision models under 15B",
+            if item.get("status") == "retired" and not is_in:
+                continue
+            opts.append({**item, "lifecycle": item.get("status", "current"),
+                         "group": "Vision models under 15B",
                          "status": "installed" if is_in else "download"})
         for m in sorted(have):
             if m not in known and m.replace(":latest", "") not in known:
@@ -115,14 +75,51 @@ def build_options(provider: str, live: Optional[Iterable[str]], installed: Itera
     live_set = set(live or [])
     if live_set:
         for item in suggested:
-            if item["id"] in live_set:
-                opts.append({**item, "group": "Recommended", "status": "available"})
+            if item["id"] in live_set and item.get("status") != "retired":
+                opts.append({**item, "lifecycle": item.get("status", "current"),
+                             "group": "Recommended", "status": "available"})
         rec = {o["id"] for o in opts}
         for m in sorted(live_set):
             if m not in rec:
-                opts.append({"id": m, "label": m, "note": "", "group": "All vision models on your account",
-                             "status": "available"})
+                cat = catalog_entry(provider, m) or {}
+                opts.append({"id": m, "label": m, "note": cat.get("note", ""),
+                             "lifecycle": cat.get("status", "current"), "replacement": cat.get("replacement"),
+                             "group": "All vision models on your account", "status": "available"})
     else:
         for item in suggested:
-            opts.append({**item, "group": "Suggested (verified once your key is saved)", "status": "suggested"})
+            if item.get("status") == "retired":
+                continue
+            opts.append({**item, "lifecycle": item.get("status", "current"),
+                         "group": "Suggested (verified once your key is saved)", "status": "suggested"})
     return opts
+
+
+def saved_model_status(provider: str, model: Optional[str], live: Iterable[str], installed: Iterable[str] = ()) -> Dict:
+    """Is the user's saved model still usable? Used for warnings in Settings and
+    the pre-flight check before an ingest.
+
+    state: ok | unknown (can't verify yet) | missing (provider no longer lists it,
+    or not downloaded in Ollama) | deprecated | retired.
+    """
+    if not model:
+        return {"state": "ok"}
+    cat = catalog_entry(provider, model) or {}
+    out = {"model": model, "replacement": cat.get("replacement")}
+    if provider == "ollama":
+        have = set(installed)
+        if model not in have and (model + ":latest") not in have:
+            return {**out, "state": "missing",
+                    "message": f"'{model}' isn't downloaded in Ollama on this PC."}
+    else:
+        live_set = set(live or [])
+        if not live_set:
+            return {**out, "state": "unknown"}
+        if model not in live_set:
+            return {**out, "state": "missing",
+                    "message": f"Your provider no longer offers '{model}' (it may have been retired or renamed)."}
+    if cat.get("status") in ("deprecated", "retired"):
+        word = "is being retired" if cat["status"] == "deprecated" else "has been retired"
+        rep = f" Switch to {cat['replacement']}." if cat.get("replacement") else ""
+        return {**out, "state": cat["status"], "message": f"'{model}' {word}.{rep}"}
+    return {**out, "state": "ok"}
+

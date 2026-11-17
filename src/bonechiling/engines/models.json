@@ -1,0 +1,293 @@
+{
+  "_about": "Curated vision models for the model picker. Edit this file to add, deprecate or retire models; no code change needed. status: current | deprecated (still works, shows a warning + replacement) | retired (hidden unless already selected). Checked monthly by .github/workflows/check-models.yml.",
+  "updated": "2026-11-17",
+  "ollama": [
+    {
+      "id": "qwen2.5vl:3b",
+      "label": "Qwen2.5-VL 3B",
+      "size": "3.2 GB",
+      "note": "Recommended for laptops; reads film labels well",
+      "status": "current"
+    },
+    {
+      "id": "qwen2.5vl:7b",
+      "label": "Qwen2.5-VL 7B",
+      "size": "6.0 GB",
+      "note": "More accurate; needs ~8 GB RAM/VRAM",
+      "status": "current"
+    },
+    {
+      "id": "qwen3-vl:2b",
+      "label": "Qwen3-VL 2B",
+      "size": "1.9 GB",
+      "note": "Newest Qwen vision, smallest",
+      "status": "current"
+    },
+    {
+      "id": "qwen3-vl:4b",
+      "label": "Qwen3-VL 4B",
+      "size": "3.3 GB",
+      "note": "Newest Qwen vision, balanced",
+      "status": "current"
+    },
+    {
+      "id": "qwen3-vl:8b",
+      "label": "Qwen3-VL 8B",
+      "size": "6.1 GB",
+      "note": "Newest Qwen vision, most accurate under 15B",
+      "status": "current"
+    },
+    {
+      "id": "gemma4:e2b",
+      "label": "Gemma 4 E2B",
+      "size": "7.2 GB",
+      "note": "Google, efficient 2B-effective",
+      "status": "current"
+    },
+    {
+      "id": "gemma4:e4b",
+      "label": "Gemma 4 E4B",
+      "size": "9.6 GB",
+      "note": "Google, efficient 4B-effective",
+      "status": "current"
+    },
+    {
+      "id": "gemma3:4b",
+      "label": "Gemma 3 4B",
+      "size": "3.3 GB",
+      "note": "Google, fast",
+      "status": "current"
+    },
+    {
+      "id": "gemma3:12b",
+      "label": "Gemma 3 12B",
+      "size": "8.1 GB",
+      "note": "Google, strong general vision",
+      "status": "current"
+    },
+    {
+      "id": "ministral-3:3b",
+      "label": "Ministral 3 3B",
+      "size": "3.0 GB",
+      "note": "Mistral, small",
+      "status": "current"
+    },
+    {
+      "id": "ministral-3:8b",
+      "label": "Ministral 3 8B",
+      "size": "6.0 GB",
+      "note": "Mistral, balanced",
+      "status": "current"
+    },
+    {
+      "id": "ministral-3:14b",
+      "label": "Ministral 3 14B",
+      "size": "9.1 GB",
+      "note": "Mistral, largest under 15B",
+      "status": "current"
+    },
+    {
+      "id": "llama3.2-vision:11b",
+      "label": "Llama 3.2 Vision 11B",
+      "size": "7.8 GB",
+      "note": "Meta",
+      "status": "current"
+    },
+    {
+      "id": "minicpm-v:8b",
+      "label": "MiniCPM-V 8B",
+      "size": "5.5 GB",
+      "note": "Good at reading text in images",
+      "status": "current"
+    },
+    {
+      "id": "granite3.2-vision:2b",
+      "label": "Granite 3.2 Vision 2B",
+      "size": "2.4 GB",
+      "note": "IBM, document-focused",
+      "status": "current"
+    },
+    {
+      "id": "llava:7b",
+      "label": "LLaVA 7B",
+      "size": "4.7 GB",
+      "note": "Classic, widely tested",
+      "status": "current"
+    },
+    {
+      "id": "llava:13b",
+      "label": "LLaVA 13B",
+      "size": "8.0 GB",
+      "note": "Classic, larger",
+      "status": "current"
+    },
+    {
+      "id": "llava-llama3:8b",
+      "label": "LLaVA-Llama3 8B",
+      "size": "5.5 GB",
+      "note": "LLaVA on Llama 3",
+      "status": "current"
+    },
+    {
+      "id": "llava-phi3:3.8b",
+      "label": "LLaVA-Phi3 3.8B",
+      "size": "2.9 GB",
+      "note": "Small LLaVA",
+      "status": "current"
+    },
+    {
+      "id": "moondream:1.8b",
+      "label": "Moondream 1.8B",
+      "size": "1.7 GB",
+      "note": "Tiny; fastest, least accurate",
+      "status": "current"
+    }
+  ],
+  "cloud": {
+    "anthropic": [
+      {
+        "id": "claude-opus-5-5",
+        "label": "Claude Opus 5.5",
+        "note": "Most capable Opus; default",
+        "status": "current"
+      },
+      {
+        "id": "claude-sonnet-5-5",
+        "label": "Claude Sonnet 5.5",
+        "note": "Fast and capable, lower cost",
+        "status": "current"
+      },
+      {
+        "id": "claude-haiku-5-5",
+        "label": "Claude Haiku 5.5",
+        "note": "Cheapest and fastest",
+        "status": "current"
+      },
+      {
+        "id": "claude-fable-5-2",
+        "label": "Claude Fable 5.2",
+        "note": "Most capable, highest cost",
+        "status": "current"
+      },
+      {
+        "id": "claude-opus-5",
+        "label": "Claude Opus 5",
+        "note": "Previous Opus",
+        "status": "deprecated",
+        "replacement": "claude-opus-5-5"
+      },
+      {
+        "id": "claude-sonnet-5",
+        "label": "Claude Sonnet 5",
+        "note": "Previous Sonnet",
+        "status": "deprecated",
+        "replacement": "claude-sonnet-5-5"
+      }
+    ],
+    "openai": [
+      {
+        "id": "gpt-5",
+        "label": "GPT-5",
+        "note": "",
+        "status": "current"
+      },
+      {
+        "id": "gpt-5-mini",
+        "label": "GPT-5 mini",
+        "note": "Lower cost",
+        "status": "current"
+      },
+      {
+        "id": "gpt-4.1",
+        "label": "GPT-4.1",
+        "note": "",
+        "status": "current"
+      },
+      {
+        "id": "gpt-4.1-mini",
+        "label": "GPT-4.1 mini",
+        "note": "Lower cost",
+        "status": "current"
+      },
+      {
+        "id": "gpt-4o",
+        "label": "GPT-4o",
+        "note": "",
+        "status": "current"
+      },
+      {
+        "id": "gpt-4o-mini",
+        "label": "GPT-4o mini",
+        "note": "Lowest cost",
+        "status": "current"
+      }
+    ],
+    "gemini": [
+      {
+        "id": "gemini-2.5-flash",
+        "label": "Gemini 2.5 Flash",
+        "note": "Fast, good value",
+        "status": "current"
+      },
+      {
+        "id": "gemini-2.5-flash-lite",
+        "label": "Gemini 2.5 Flash-Lite",
+        "note": "Cheapest",
+        "status": "current"
+      },
+      {
+        "id": "gemini-2.5-pro",
+        "label": "Gemini 2.5 Pro",
+        "note": "Most accurate",
+        "status": "current"
+      },
+      {
+        "id": "gemini-2.0-flash",
+        "label": "Gemini 2.0 Flash",
+        "note": "Older",
+        "status": "deprecated",
+        "replacement": "gemini-2.5-flash"
+      }
+    ],
+    "openrouter": [
+      {
+        "id": "google/gemini-2.5-flash",
+        "label": "Gemini 2.5 Flash",
+        "note": "Fast, good value",
+        "status": "current"
+      },
+      {
+        "id": "google/gemini-2.0-flash-001",
+        "label": "Gemini 2.0 Flash",
+        "note": "",
+        "status": "retired",
+        "replacement": "google/gemini-2.5-flash"
+      },
+      {
+        "id": "anthropic/claude-sonnet-4.5",
+        "label": "Claude Sonnet 4.5",
+        "note": "",
+        "status": "current"
+      },
+      {
+        "id": "openai/gpt-4o-mini",
+        "label": "GPT-4o mini",
+        "note": "",
+        "status": "current"
+      },
+      {
+        "id": "qwen/qwen2.5-vl-72b-instruct",
+        "label": "Qwen2.5-VL 72B",
+        "note": "",
+        "status": "current"
+      },
+      {
+        "id": "meta-llama/llama-3.2-11b-vision-instruct",
+        "label": "Llama 3.2 11B Vision",
+        "note": "",
+        "status": "retired",
+        "replacement": "qwen/qwen2.5-vl-72b-instruct"
+      }
+    ]
+  }
+}

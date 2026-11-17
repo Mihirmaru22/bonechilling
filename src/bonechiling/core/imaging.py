@@ -73,3 +73,21 @@ def encode_jpeg_b64(
     finally:
         if not isinstance(image, Image.Image):
             img.close()
+
+
+def render_jpeg(path: Union[str, Path], max_size: int = 640, quality: int = 85) -> bytes:
+    """Render any supported film file (photo, TIFF, DICOM) to JPEG bytes for display."""
+    from . import dicom as dicom_mod
+    p = Path(path)
+    img = None
+    if dicom_mod.is_dicom(p):
+        study = dicom_mod.read_dicom(p)
+        img = study.image if study is not None else None
+    if img is None:
+        img = open_image(p)
+    img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+    if img.mode not in ("RGB", "L"):
+        img = img.convert("RGB")
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=quality)
+    return buf.getvalue()

@@ -69,3 +69,26 @@ class _Timer:
 
     def __exit__(self, *exc):
         self.ms = self.elapsed_ms()
+
+
+_MODEL_GONE_HINTS = ("model_not_found", "model not found", "does not exist", "not found for api version",
+                     "no such model", "decommission", "deprecated", "retired", "is not supported",
+                     "unknown model", "invalid model", "no endpoints found")
+
+
+def explain_http_error(status: int, body: str, model: str) -> str:
+    """Turn a provider error into something a clinician can act on.
+
+    The common case worth special wording is a model the provider has retired
+    or renamed: the fix is to pick another model and retry the failed films."""
+    text = (body or "")[:300]
+    low = text.lower()
+    if status in (400, 404, 410) and "model" in low and any(h in low for h in _MODEL_GONE_HINTS):
+        return (f"Model '{model}' isn't available from this provider any more (retired or renamed). "
+                f"Pick another model in Settings, then use 'Retry failed films'. [HTTP {status}: {text[:160]}]")
+    if status in (401, 403):
+        return f"The provider rejected the API key (HTTP {status}). Check the key in Settings."
+    if status == 429:
+        return f"Rate limit or quota reached at the provider (HTTP 429). Try again later. {text[:120]}"
+    return f"HTTP {status}: {text[:200]}"
+

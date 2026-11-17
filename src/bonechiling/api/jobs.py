@@ -59,6 +59,15 @@ def preflight(engine: VisionEngine) -> Optional[str]:
             return ("Can't reach Ollama on this PC. Start Ollama (or open Settings → Local AI) "
                     f"and try again. ({detail})")
         return f"The AI provider rejected the connection: {detail}. Check the API key in Settings."
+    if cfg is not None and not cfg.is_local and cfg.model:
+        # Provider retired/renamed the model? Check its live list (unfiltered).
+        from ..engines.catalog import saved_model_status
+        from ..engines.registry import list_models
+        live = list_models(cfg, vision_only=False)
+        st = saved_model_status(cfg.provider, cfg.model, live)
+        if st["state"] in ("missing", "retired"):
+            rep = f" Suggested replacement: {st['replacement']}." if st.get("replacement") else ""
+            return f"{st['message']} Choose another model in Settings.{rep}"
     if cfg is not None and cfg.is_local:
         from . import ollama_helper
         installed = ollama_helper.status().get("models", [])

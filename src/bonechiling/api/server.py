@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import secrets
+from collections import OrderedDict
 from pathlib import Path
 from typing import List, Optional
 
@@ -21,10 +22,11 @@ from ..core.reconcile import reconcile_patient_images
 from ..data import db as db_mod
 from ..data import export as export_mod
 from ..data import settings as settings_mod
-from ..engines.catalog import build_options
+from ..engines.catalog import CATALOG_UPDATED, build_options, saved_model_status
 from ..pipeline.runner import clean_path as runner_clean, refresh_patient_demographics
 from ..engines.registry import PRESETS, build_engine, config_from_preset, list_models
-from . import ollama_helper
+from ..core.imaging import render_jpeg
+from . import ollama_helper, os_open
 from .jobs import JobManager
 
 __version__ = "0.2.0"
@@ -87,6 +89,14 @@ def create_app(
         if not secrets.compare_digest(x_api_token, app.state.token):
             raise HTTPException(status_code=401, detail="invalid or missing API token")
 
+    def auth_img(token: str = "", x_api_token: str = Header(default="")) -> None:
+        """<img src> can't send headers, so image URLs may carry ?token=."""
+        if not (secrets.compare_digest(x_api_token, app.state.token)
+                or secrets.compare_digest(token, app.state.token)):
+            raise HTTPException(status_code=401, detail="invalid or missing API token")
+
+    _thumbs: "OrderedDict[tuple, bytes]" = OrderedDict()   # small LRU of rendered JPEGs
+
     # ----- unauthenticated ------------------------------------------- #
     @app.get("/health")
     def health():
@@ -121,14 +131,23 @@ def create_app(
         preset = PRESETS.get(provider)
         if preset is None:
             raise HTTPException(400, f"unknown provider '{provider}'")
+        cfg = settings_mod.load_config()
+        saved = cfg.get("model") if cfg.get("provider") == provider else None
         if provider == "ollama":
-            installed = ollama_helper.status().get("models", [])
+            st = ollama_helper.status()
+            installed = st.get("models", [])
+            sv = saved_model_status("ollama", saved, [], installed) if st.get("running") else {"state": "unknown"}
             return {"models": installed, "default": preset.default_model,
-                    "options": build_options("ollama", None, installed), "verified": True}
+                    "options": build_options("ollama", None, installed), "verified": True,
+                    "saved": sv, "catalog_updated": CATALOG_UPDATED}
         key = settings_mod.get_api_key(provider) if preset.needs_key else None
-        found = list_models(config_from_preset(provider, api_key=key)) if (key or not preset.needs_key) else []
+        conf = config_from_preset(provider, api_key=key)
+        found = list_models(conf) if (key or not preset.needs_key) else []
+        everything = list_models(conf, vision_only=False) if found else []
         return {"models": found, "default": preset.default_model,
-                "options": build_options(provider, found), "verified": bool(found)}
+                "options": build_options(provider, found), "verified": bool(found),
+                "saved": saved_model_status(provider, saved, everything),
+                "catalog_updated": CATALOG_UPDATED}
 
     # ----- API keys (write-only; never returned) --------------------- #
     @app.post("/api-keys", dependencies=[Depends(auth)])
@@ -140,6 +159,19 @@ def create_app(
         except settings_mod.KeyStoreError as exc:
             raise HTTPException(503, str(exc))
         return {"provider": body.provider, "stored": True}
+
+    @app.get("/api-keys/{provider}", dependencies=[Depends(auth)])
+    def get_key(provider: str, reveal: bool = False):
+        """Masked by default so the key never sits in the page; the eye button
+        asks for the full key explicitly (local app, authenticated request)."""
+        if provider not in PRESETS:
+            raise HTTPException(400, f"unknown provider '{provider}'")
+        key = settings_mod.get_api_key(provider) or ""
+        masked = (key[:4] + "•" * 12 + key[-4:]) if len(key) > 10 else ("•" * len(key))
+        out = {"provider": provider, "has_key": bool(key), "masked": masked}
+        if reveal and key:
+            out["key"] = key
+        return out
 
     @app.delete("/api-keys/{provider}", dependencies=[Depends(auth)])
     def del_key(provider: str):
@@ -256,6 +288,71 @@ def create_app(
             return {"deleted": True, "films_removed": db_mod.delete_patient(conn, patient_id)}
         finally:
             conn.close()
+
+    @app.post("/patients/{patient_id}/open-folder", dependencies=[Depends(auth)])
+    def open_patient_folder(patient_id: int):
+        conn = _db()
+        try:
+            p = db_mod.get_patient(conn, patient_id)
+        finally:
+            conn.close()
+        if not p:
+            raise HTTPException(404, "unknown patient")
+        try:
+            os_open.open_folder(Path(p.get("folder_path") or ""))
+        except FileNotFoundError:
+            raise HTTPException(409, f"The folder is no longer on this PC: {p.get('folder_path')}")
+        except OSError as exc:
+            raise HTTPException(500, f"Couldn't open the folder: {exc}")
+        return {"opened": p.get("folder_path")}
+
+    @app.post("/images/{image_id}/reveal", dependencies=[Depends(auth)])
+    def reveal_image(image_id: int):
+        conn = _db()
+        try:
+            img = db_mod.get_image(conn, image_id)
+        finally:
+            conn.close()
+        if not img:
+            raise HTTPException(404, "unknown film")
+        try:
+            os_open.reveal_file(Path(img.get("file_path") or ""))
+        except FileNotFoundError:
+            raise HTTPException(409, f"The image file is no longer on this PC: {img.get('file_path')}")
+        except OSError as exc:
+            raise HTTPException(500, f"Couldn't open the folder: {exc}")
+        return {"revealed": img.get("file_path")}
+
+    @app.get("/images/{image_id}/view", dependencies=[Depends(auth_img)])
+    def image_view(image_id: int, size: int = 640):
+        """The film as a JPEG (DICOM rendered, EXIF rotation applied)."""
+        size = max(64, min(int(size), 2400))
+        conn = _db()
+        try:
+            img = db_mod.get_image(conn, image_id)
+        finally:
+            conn.close()
+        if not img:
+            raise HTTPException(404, "unknown film")
+        path = Path(img.get("file_path") or "")
+        try:
+            mtime = path.stat().st_mtime
+        except OSError:
+            raise HTTPException(404, f"Image file not found: {path}")
+        key = (image_id, size, mtime)
+        data = _thumbs.get(key)
+        if data is None:
+            try:
+                data = render_jpeg(path, size)
+            except Exception as exc:  # noqa: BLE001
+                raise HTTPException(415, f"Can't display this image: {exc}")
+            _thumbs[key] = data
+            while len(_thumbs) > 200:
+                _thumbs.popitem(last=False)
+        else:
+            _thumbs.move_to_end(key)
+        return Response(content=data, media_type="image/jpeg",
+                        headers={"Cache-Control": "private, max-age=3600"})
 
     @app.delete("/images/{image_id}", dependencies=[Depends(auth)])
     def remove_image(image_id: int):

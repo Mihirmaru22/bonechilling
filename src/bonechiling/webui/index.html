@@ -4,9 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BoneChilling — Orthopedic X-ray Reader</title>
+  <link rel="preload" href="fonts/host-grotesk-400_700-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <a class="skip" href="#app">Skip to content</a>
   <div class="shell">
     <aside class="sidebar">
       <div class="brand">
@@ -22,16 +24,16 @@
       <nav id="nav" aria-label="Main">
         <div class="nav-group">Workflow</div>
         <button data-view="worklist" class="active">
-          <span class="ico" data-icon="users"></span>
+          <span class="idx">01</span>
           <span class="nav-text"><b>Worklist</b><small>Patients &amp; review status</small></span>
         </button>
         <button data-view="ingest">
-          <span class="ico" data-icon="upload"></span>
+          <span class="idx">02</span>
           <span class="nav-text"><b>Ingest</b><small>Analyze new X-ray folders</small></span>
         </button>
         <div class="nav-group">Configuration</div>
         <button data-view="settings">
-          <span class="ico" data-icon="sliders"></span>
+          <span class="idx">03</span>
           <span class="nav-text"><b>Settings</b><small>AI engine &amp; local model</small></span>
         </button>
       </nav>
@@ -39,12 +41,12 @@
       <div class="sidebar-foot">
         <div id="conn" class="conn"><span class="dot"></span><span class="conn-text">Connecting…</span></div>
         <p class="disclaimer">
-          Assistive tool — reports objective facts only. Every finding must be verified by a qualified physician.
+          Assistive tool. It reports objective facts only; every finding must be verified by a qualified physician.
         </p>
       </div>
     </aside>
 
-    <main id="app"><div class="loading">Loading…</div></main>
+    <main id="app" tabindex="-1"><div class="loading">Loading…</div></main>
   </div>
 
   <div id="toasts" aria-live="polite"></div>

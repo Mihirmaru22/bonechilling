@@ -1,5 +1,34 @@
 # BoneChilling — design system
 
+## Concept card
+```
+Idea:        The app is a reading-room lightbox: films are clipped up, read, and signed off.
+Metaphor:    Radiology reading room — lightbox glass, film base, film-label print, lead L/R markers.
+Signature:   Opening a patient "clips" each film onto the lightbox — panels drop 6px into place in
+             sequence while their dark film header backlights on. Films carry a lead-marker style
+             L / R badge, taken from the markers techs place on real radiographs.
+Emotion:     Calm, precise, clinical — nothing decorative competes with the findings.
+Motion verb: "clip and settle" — short (160–320ms), decisive ease-out, no bounce.
+Screenshot:  Patient page: big name, film-label meta line, row of dark film headers with L/R markers.
+```
+
+## Type
+- **Host Grotesk** (variable 400–700, Google, self-hosted) — all text and display.
+- **IBM Plex Mono** 400/500 — only for film-label data: IDs, dates, file paths, counters' units.
+- Scale has deliberate jumps: page titles `clamp(2rem, 1.2rem + 2.2vw, 3.25rem)`, tracking −0.03em,
+  leading 1.0; numerals `clamp(2.25rem, …, 3.5rem)` tabular; UI 12–14px; body 14–15px.
+- Uppercase limited to the table header row; no eyebrow above every heading.
+
+## Grid, shape, motion
+- Content hangs from one left edge; panels are hairline-bordered, flat (no soft shadows).
+- **One radius rule: 4px** for every control, panel and badge.
+- Hovers move: index rows slide their content 6px and the arrow travels; buttons nudge their icon;
+  nav items slide their label. Colour-only changes are kept for utility links.
+- Page changes use a short cross-fade + 8px rise (View Transitions API, falls back to a CSS rise).
+- `prefers-reduced-motion`: all movement removed, state changes kept (colour, fill, underline).
+
+## Palette
+
 Palette follows the art-direction rules of the `awwwards` skill (4–6 named roles taken from
 the subject's own world, one accent used rarely, AA contrast everywhere). Tokens live in
 `src/bonechiling/webui/styles.css`.

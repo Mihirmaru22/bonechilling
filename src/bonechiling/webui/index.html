@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BoneChilling — Orthopedic X-ray Reader</title>
+  <script>
+    // Apply the saved theme before first paint (no flash of the wrong theme).
+    try { var t = localStorage.getItem("bc_theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
   <link rel="preload" href="fonts/host-grotesk-400_700-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -39,6 +43,7 @@
       </nav>
 
       <div class="sidebar-foot">
+        <div class="foot-row"><span class="lbl">Theme</span><div class="theme-switch" id="themeSwitch" role="radiogroup" aria-label="Theme"></div></div>
         <div id="conn" class="conn"><span class="dot"></span><span class="conn-text">Connecting…</span></div>
         <p class="disclaimer">
           Assistive tool. It reports objective facts only; every finding must be verified by a qualified physician.

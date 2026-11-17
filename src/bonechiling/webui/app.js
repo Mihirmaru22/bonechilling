@@ -54,6 +54,9 @@ const ICONS = {
   open: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5M9.5 13.5 12 11l2.5 2.5"/>',
   close: '<path d="M6 6l12 12M18 6 6 18"/>',
   prev: '<path d="m15 6-6 6 6 6"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+  monitor: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
 };
 const icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ""}</svg>`;
 
@@ -149,6 +152,26 @@ function watchJob(jobId, { onEvent = () => {}, onEnd = () => {} } = {}) {
   ws.onclose = () => { if (!ended) { ended = true; onEnd("disconnected"); } };
   return ws;
 }
+
+// ---- theme: system / light / dark (remembered per PC) --------------------- //
+const THEMES = [["system", "monitor", "System"], ["light", "sun", "Light"], ["dark", "moon", "Dark"]];
+function getTheme() { try { return localStorage.getItem("bc_theme") || "system"; } catch { return "system"; } }
+function setTheme(t) {
+  if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  try { localStorage.setItem("bc_theme", t); } catch { /* private mode: applies for this session only */ }
+  document.querySelectorAll(".theme-switch button").forEach((b) => b.setAttribute("aria-checked", b.dataset.theme === t));
+}
+function themeSwitch(container, withLabels = false) {
+  container.innerHTML = THEMES.map(([k, ic, label]) =>
+    `<button type="button" role="radio" data-theme="${k}" aria-checked="${getTheme() === k}" title="${label} theme" aria-label="${label} theme">${icon(ic)}${withLabels ? `<span>${label}</span>` : ""}</button>`).join("");
+  container.onclick = (e) => { const b = e.target.closest("button[data-theme]"); if (b) setTheme(b.dataset.theme); };
+  container.onkeydown = (e) => {
+    if (!["ArrowLeft", "ArrowRight"].includes(e.key)) return;
+    const i = THEMES.findIndex(([k]) => k === getTheme()), n = THEMES[(i + (e.key === "ArrowRight" ? 1 : 2)) % 3][0];
+    setTheme(n); container.querySelector(`[data-theme="${n}"]`).focus();
+  };
+}
+themeSwitch(document.getElementById("themeSwitch"));
 
 // ---- connection indicator ------------------------------------------------ //
 async function checkConn() {
@@ -665,6 +688,11 @@ views.settings = async () => {
     </section>
     <section class="set-section">
       <div class="no">03</div>
+      <div class="desc"><h3>Appearance</h3><p>System follows your computer’s light/dark setting.</p></div>
+      <div><div class="theme-switch on-surface" id="themeSwitch2" role="radiogroup" aria-label="Theme"></div></div>
+    </section>
+    <section class="set-section">
+      <div class="no">04</div>
       <div class="desc"><h3>Privacy &amp; safety</h3><p>How your data and keys are handled.</p></div>
       <ul class="tips">
         <li>${icon("check")}<span>Results are stored in a local database on this PC.</span></li>
@@ -673,6 +701,7 @@ views.settings = async () => {
       </ul>
     </section>
   </div>`));
+  themeSwitch($("#themeSwitch2"), true);
   loadOllama();
   try {
     const [providers, cfg] = await Promise.all([api("/providers"), api("/settings")]);

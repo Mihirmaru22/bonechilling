@@ -29,7 +29,7 @@ from ..core.imaging import render_jpeg
 from . import ollama_helper, os_open
 from .jobs import JobManager
 
-__version__ = "0.2.0"
+from .. import __version__
 
 
 # ----- request bodies ------------------------------------------------------ #

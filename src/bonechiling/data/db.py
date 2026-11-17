@@ -148,6 +148,26 @@ def image_exists(conn: sqlite3.Connection, file_sha256: str) -> bool:
     ).fetchone() is not None
 
 
+def image_by_sha(conn: sqlite3.Connection, file_sha256: str) -> Optional[Dict[str, Any]]:
+    """The stored film for this file content, with its patient's folder."""
+    row = conn.execute(
+        """SELECT i.id, i.patient_id, i.error, i.file_path, p.folder_path
+           FROM images i LEFT JOIN patients p ON p.id = i.patient_id
+           WHERE i.file_sha256 = ?""", (file_sha256,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def image_ids_for_path(conn: sqlite3.Connection, patient_id: int, file_path: str) -> List[int]:
+    return [r["id"] for r in conn.execute(
+        "SELECT id FROM images WHERE patient_id = ? AND file_path = ?", (patient_id, file_path)
+    ).fetchall()]
+
+
+def patient_image_count(conn: sqlite3.Connection, patient_id: int) -> int:
+    return conn.execute("SELECT COUNT(*) FROM images WHERE patient_id = ?", (patient_id,)).fetchone()[0]
+
+
 def save_analysis(conn: sqlite3.Connection, patient_id: int, record: Dict[str, Any]) -> Optional[int]:
     """Atomically persist one analyzed image + its findings.
 
@@ -158,7 +178,15 @@ def save_analysis(conn: sqlite3.Connection, patient_id: int, record: Dict[str, A
     sha = record["file_sha256"]
     if image_exists(conn, sha):
         return None
+    try:
+        return _insert_analysis(conn, patient_id, record)
+    except sqlite3.IntegrityError:
+        # Another job saved the same file between our check and insert.
+        return None
 
+
+def _insert_analysis(conn: sqlite3.Connection, patient_id: int, record: Dict[str, Any]) -> int:
+    sha = record["file_sha256"]
     facts = record["facts"]
     views = facts.views or []
     label = facts.label.model_dump() if facts.label else {}
@@ -256,3 +284,43 @@ def get_patient_images(conn: sqlite3.Connection, patient_id: int) -> List[Dict[s
         (patient_id,),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+# --------------------------------------------------------------------------- #
+# Removal (database only: the user's image files are never touched)
+# --------------------------------------------------------------------------- #
+def delete_images(conn: sqlite3.Connection, image_ids: List[int]) -> int:
+    """Delete images and their findings. Returns how many images were removed.
+
+    Because ingest skips files whose sha is already stored, removing a row is
+    also how a film is queued for re-analysis on the next ingest of its folder.
+    """
+    ids = [int(i) for i in image_ids]
+    if not ids:
+        return 0
+    marks = ",".join("?" * len(ids))
+    with conn:
+        conn.execute(f"DELETE FROM findings WHERE image_id IN ({marks})", ids)
+        cur = conn.execute(f"DELETE FROM images WHERE id IN ({marks})", ids)
+    return cur.rowcount
+
+
+def patient_image_ids(conn: sqlite3.Connection, patient_id: int, failed_only: bool = False) -> List[int]:
+    sql = "SELECT id FROM images WHERE patient_id = ?"
+    if failed_only:
+        sql += " AND error IS NOT NULL AND error != ''"
+    return [r["id"] for r in conn.execute(sql, (patient_id,)).fetchall()]
+
+
+def get_image(conn: sqlite3.Connection, image_id: int) -> Optional[Dict[str, Any]]:
+    row = conn.execute("SELECT * FROM images WHERE id = ?", (image_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def delete_patient(conn: sqlite3.Connection, patient_id: int) -> int:
+    """Delete a patient with all their images, findings and review notes."""
+    removed = delete_images(conn, patient_image_ids(conn, patient_id))
+    with conn:
+        conn.execute("DELETE FROM patients WHERE id = ?", (patient_id,))
+    return removed
+

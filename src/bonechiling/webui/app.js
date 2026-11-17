@@ -80,6 +80,35 @@ function countUp(node, to) {
   requestAnimationFrame(step);
 }
 
+// Confirmation dialog (keyboard: Esc cancels, Enter confirms).
+function confirmDialog({ title, body, confirm = "Confirm", danger = false }) {
+  return new Promise((resolve) => {
+    const prev = document.activeElement;
+    const m = el(`<div class="modal-back" role="presentation"><div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="mTitle">
+      <h3 id="mTitle">${title}</h3><div class="modal-body">${body}</div>
+      <div class="btn-row"><button class="btn secondary" data-a="no">Cancel</button><button class="btn ${danger ? "danger" : ""}" data-a="yes">${confirm}</button></div>
+    </div></div>`);
+    const done = (v) => { m.remove(); document.removeEventListener("keydown", key); prev && prev.focus && prev.focus(); resolve(v); };
+    const key = (e) => { if (e.key === "Escape") done(false); };
+    m.addEventListener("click", (e) => { const a = e.target.closest("[data-a]"); if (a) done(a.dataset.a === "yes"); else if (e.target === m) done(false); });
+    document.addEventListener("keydown", key);
+    document.body.appendChild(m);
+    m.querySelector('[data-a="no"]').focus();
+  });
+}
+
+// Stream a job's events; calls onEvent for each and onEnd(status) once.
+function watchJob(jobId, { onEvent = () => {}, onEnd = () => {} } = {}) {
+  const ws = new WebSocket(`${location.origin.replace("http", "ws")}/ws/jobs/${jobId}?token=${encodeURIComponent(TOKEN)}`);
+  let ended = false;
+  ws.onmessage = (m) => {
+    const ev = JSON.parse(m.data);
+    if (ev.kind === "job_end") { ended = true; ws.close(); onEnd(ev.status); } else onEvent(ev);
+  };
+  ws.onclose = () => { if (!ended) { ended = true; onEnd("disconnected"); } };
+  return ws;
+}
+
 // ---- connection indicator ------------------------------------------------ //
 async function checkConn() {
   const text = conn.querySelector(".conn-text");
@@ -259,6 +288,11 @@ views.patient = async (id) => {
         <div class="folder">${esc(p.folder_path || "")}</div>
     </header>
 
+    <div id="reStrip" class="re-strip" style="display:none" aria-live="polite">
+      <div class="re-top"><b id="reTitle">Re-analyzing…</b><span class="muted" id="reMsg"></span><button class="btn secondary sm" id="reCancel">Cancel</button></div>
+      <div class="progress"><div id="reBar"></div></div>
+    </div>
+
     ${conflicts ? `<div class="alert" role="alert">${icon("alert")}<div><b>Check the patient name.</b> The name printed on the film label disagrees with other sources on ${conflicts} film${conflicts > 1 ? "s" : ""}. Confirm identity before signing off.</div></div>` : ""}
 
     <div class="two-col">
@@ -282,6 +316,17 @@ views.patient = async (id) => {
             <input id="rhw" value="${esc(p.verified_hardware || "")}" placeholder="Leave blank to keep the AI summary" />
             <div class="hint">If filled, this replaces the AI hardware summary in the export.</div>
             <div class="btn-row"><button class="btn" id="rsave">${icon("check")} Save sign-off</button></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><div><h3>Correct this data</h3><p>If a film failed or was read wrongly</p></div></div>
+          <div class="panel-body">
+            <div class="fix-list">
+              ${errors ? `<button class="fix" id="fxFailed"><b>Retry failed films <span class="badge err">${errors}</span></b><small>Read the ${errors} film${errors > 1 ? "s" : ""} that failed again, with the current AI settings.</small></button>` : ""}
+              <button class="fix" id="fxAll"><b>Re-analyze all films</b><small>Discard these results and read every film in the folder again.</small></button>
+              <button class="fix danger" id="fxRemove"><b>Remove patient</b><small>Delete this patient and all results from BoneChilling.</small></button>
+            </div>
+            <p class="hint">Your image files are never changed or deleted. To fix one film, use the actions under that film.</p>
           </div>
         </div>
       </aside>
@@ -316,9 +361,67 @@ views.patient = async (id) => {
       <div class="film-sec"><div class="k">Hardware</div>${hwItems.length ? `<ul>${hwItems.map((h) => `<li>${esc(h.implant || h)}</li>`).join("")}</ul>` : `<span class="muted">None</span>`}</div>
       <div class="film-sec"><div class="k">Film label</div><div class="mono">${esc(nm.value || "—")}${img.study_date ? ` <span class="muted">· ${esc(img.study_date)}</span>` : ""}</div></div>
       <div class="film-foot"><span title="${esc(img.file_path || "")}">${esc(fileName || "film " + pad2(i + 1))}</span><span>${esc(img.engine_used || "")}</span></div>
+      <div class="film-actions">
+        <button class="act" data-act="redo" data-id="${img.id}">${img.error ? "Retry" : "Re-analyze"}</button>
+        <button class="act danger" data-act="remove" data-id="${img.id}" data-name="${esc(fileName)}">Remove</button>
+      </div>
     </article>`));
   });
   films.classList.add("clip-in");   // signature: films clip onto the lightbox
+
+  // ---- corrections -------------------------------------------------------- //
+  const busy = (on) => pd.querySelectorAll(".fix, .act").forEach((b) => (b.disabled = on));
+  async function reanalyze(body, label) {
+    let r;
+    busy(true);
+    try { r = await api(`/patients/${id}/reanalyze`, { method: "POST", json: body }); }
+    catch (e) { busy(false); toast(e.message.replace(/^\d+: /, ""), "err"); return; }
+    const strip = $("#reStrip"), bar = $("#reBar"), msgEl = $("#reMsg");
+    strip.style.display = "block"; $("#reTitle").textContent = label;
+    let done = 0, failed = 0; const total = r.films_queued || 1;
+    msgEl.textContent = `0 of ${r.films_queued} films`;
+    $("#reCancel").onclick = () => api(`/jobs/${r.job_id}/cancel`, { method: "POST" }).catch(() => {});
+    watchJob(r.job_id, {
+      onEvent(ev) {
+        if (!strip.isConnected) return;
+        if (ev.kind === "queued") msgEl.textContent = ev.message;
+        if (ev.kind === "image_done" || ev.kind === "image_failed") {
+          done++; if (ev.kind === "image_failed") failed++;
+          msgEl.textContent = `${done} of ${r.films_queued} films${failed ? ` · ${failed} failed` : ""}`;
+          bar.style.width = Math.min(100, Math.round((done / total) * 100)) + "%";
+        }
+        if (ev.kind === "error") msgEl.textContent = ev.message;
+      },
+      onEnd(status) {
+        if (status === "completed") toast(failed ? `Finished with ${failed} failed film${failed > 1 ? "s" : ""}` : "Re-analysis complete", failed ? "err" : "ok");
+        else if (status === "cancelled") toast("Re-analysis cancelled. Films not yet read can be retried.", "");
+        else toast("Re-analysis stopped: " + status, "err");
+        if (document.getElementById("pd")) render("patient", id);
+      },
+    });
+  }
+  const fxF = $("#fxFailed");
+  if (fxF) fxF.onclick = () => reanalyze({ scope: "failed" }, "Retrying failed films");
+  $("#fxAll").onclick = async () => {
+    if (await confirmDialog({ title: "Re-analyze all films?", confirm: "Re-analyze all",
+      body: `<p>The current results for all ${imgs.length} films will be discarded and every film in the folder read again with the current AI settings.</p><p class="muted">Your sign-off is reset to “Awaiting review”. Notes are kept.</p>` }))
+      reanalyze({ scope: "all" }, "Re-analyzing all films");
+  };
+  $("#fxRemove").onclick = async () => {
+    if (!(await confirmDialog({ title: `Remove ${esc(name)}?`, confirm: "Remove patient", danger: true,
+      body: `<p>This deletes the patient, all ${imgs.length} film results and the sign-off notes from BoneChilling. It can’t be undone.</p><p class="muted">The image files in <span class="mono">${esc(p.folder_path || "")}</span> are not touched; you can ingest the folder again later.</p>` }))) return;
+    try { await api(`/patients/${id}`, { method: "DELETE" }); toast(`${name} removed`, "ok"); navigate("worklist"); }
+    catch (e) { toast(e.message, "err"); }
+  };
+  films.onclick = async (e) => {
+    const b = e.target.closest(".act"); if (!b) return;
+    const imgId = +b.dataset.id;
+    if (b.dataset.act === "redo") return reanalyze({ scope: "image", image_id: imgId }, "Re-analyzing film");
+    if (!(await confirmDialog({ title: "Remove this film?", confirm: "Remove film", danger: true,
+      body: `<p>The result for <span class="mono">${b.dataset.name}</span> is deleted from BoneChilling. The image file stays on disk.</p><p class="muted">If you ingest this folder again, the film will be read again.</p>` }))) return;
+    try { await api(`/images/${imgId}`, { method: "DELETE" }); toast("Film removed", "ok"); render("patient", id); }
+    catch (err) { toast(err.message, "err"); }
+  };
 
   $("#rsave").onclick = async () => {
     const btn = $("#rsave");
@@ -365,7 +468,7 @@ views.ingest = () => {
           </div>
         </div>
         <div class="panel" id="prog" style="display:none">
-          <div class="panel-head"><div><h3>Analysis</h3><p id="pstatus">Starting…</p></div><span id="pbadge" class="badge info">Running</span></div>
+          <div class="panel-head"><div><h3>Analysis</h3><p id="pstatus">Starting…</p></div><div class="mi-row"><span id="pbadge" class="badge info">Running</span><button class="btn secondary sm" id="pcancel">Cancel</button></div></div>
           <div class="panel-body">
             <div class="counters">
               <div><div class="v" id="sFolders">0</div><div class="k">Folders</div></div>
@@ -440,8 +543,15 @@ async function startIngest() {
     ingestRunning = false; btn.disabled = false;
     pbar.style.width = "100%";
     const ok = status === "completed";
-    pbadge.className = "badge " + (ok ? "ok" : "err"); pbadge.textContent = ok ? "Completed" : status;
-    pstatus.textContent = ok ? `Finished: ${c.saved} film${c.saved === 1 ? "" : "s"} saved across ${c.done} folder${c.done === 1 ? "" : "s"}.` : `Job ${status}.`;
+    $("#pcancel").style.display = "none";
+    const label = { completed: c.errors ? "Completed with errors" : "Completed", cancelled: "Cancelled", failed: "Failed" }[status] || status;
+    pbadge.className = "badge " + (ok && !c.errors ? "ok" : status === "cancelled" ? "muted" : ok ? "warn" : "err"); pbadge.textContent = label;
+    const filmsTxt = `${c.saved} film${c.saved === 1 ? "" : "s"} saved across ${c.done} folder${c.done === 1 ? "" : "s"}`;
+    pstatus.textContent =
+      status === "cancelled" ? `Cancelled. ${filmsTxt}; everything read so far is kept. Run it again to continue where it stopped.`
+      : status === "failed" ? "The analysis couldn’t start. See the log for the reason."
+      : c.errors ? `Finished: ${filmsTxt}. ${c.errors} problem${c.errors > 1 ? "s" : ""}: failed films are retried automatically when you run the folder again, or use “Retry failed films” on the patient page.`
+      : `Finished: ${filmsTxt}.`;
     $("#steps").innerHTML = steps(ok ? 2 : 1);
     $("#doneRow").style.display = "flex";
     $("#toWl").onclick = () => navigate("worklist");
@@ -452,6 +562,8 @@ async function startIngest() {
     ingestRunning = true;
     const { job_id } = await api("/ingest", { method: "POST", json: { paths } });
     pstatus.textContent = "Reading films…";
+    const pc = $("#pcancel"); pc.style.display = ""; pc.disabled = false;
+    pc.onclick = async () => { pc.disabled = true; pstatus.textContent = "Cancelling after the current film…"; try { await api(`/jobs/${job_id}/cancel`, { method: "POST" }); } catch {} };
     add(`Job ${job_id} started`);
     const ws = new WebSocket(`${location.origin.replace("http", "ws")}/ws/jobs/${job_id}?token=${encodeURIComponent(TOKEN)}`);
     ws.onmessage = (m) => {
@@ -462,6 +574,9 @@ async function startIngest() {
       }
       if (ev.kind === "folder_start") { c.folders++; pstatus.textContent = `Working on ${ev.folder}…`; add(`▸ ${ev.folder}: ${ev.message}`, "l-dir"); }
       else if (ev.kind === "image_done") { add(`  ✓ ${ev.file}: ${ev.message}`, "l-ok"); }
+      else if (ev.kind === "image_failed") { c.errors++; add(`  ✗ ${ev.file}: ${ev.message}`, "l-err"); }
+      else if (ev.kind === "image_retry") { add(`  ↻ ${ev.file}: ${ev.message}`, "l-skip"); }
+      else if (ev.kind === "queued") { pstatus.textContent = ev.message; add(ev.message, "l-skip"); }
       else if (ev.kind === "image_skipped") { c.skipped++; add(`  · ${ev.file}: ${ev.message}`, "l-skip"); }
       else if (ev.kind === "folder_done") {
         c.done++; c.saved += ev.done || 0;

@@ -22,6 +22,7 @@ from ..data import db as db_mod
 from ..data import export as export_mod
 from ..data import settings as settings_mod
 from ..engines.catalog import build_options
+from ..pipeline.runner import clean_path as runner_clean, refresh_patient_demographics
 from ..engines.registry import PRESETS, build_engine, config_from_preset, list_models
 from . import ollama_helper
 from .jobs import JobManager
@@ -54,6 +55,11 @@ class EngineTestBody(BaseModel):
 
 class IngestBody(BaseModel):
     paths: List[str]
+
+
+class ReanalyzeBody(BaseModel):
+    scope: str = "failed"            # "failed" | "all" | "image"
+    image_id: Optional[int] = None
 
 
 class ReviewBody(BaseModel):
@@ -174,13 +180,25 @@ def create_app(
     # ----- ingest jobs ----------------------------------------------- #
     @app.post("/ingest", dependencies=[Depends(auth)])
     def ingest(body: IngestBody):
-        if not body.paths:
+        paths = [p for p in (runner_clean(x) for x in body.paths) if p]
+        if not paths:
             raise HTTPException(400, "no paths given")
+        body.paths = list(dict.fromkeys(paths))   # de-duplicate, keep order
         cfg = settings_mod.load_config()
         job_id = app.state.jobs.start_ingest(
             body.paths, cfg, db_path=app.state.db_path, engine_factory=app.state.engine_factory
         )
         return {"job_id": job_id}
+
+    @app.post("/jobs/{job_id}/cancel", dependencies=[Depends(auth)])
+    def cancel_job(job_id: str):
+        if not app.state.jobs.get(job_id):
+            raise HTTPException(404, "unknown job")
+        return {"cancelling": app.state.jobs.cancel(job_id)}
+
+    @app.get("/jobs", dependencies=[Depends(auth)])
+    def active_jobs():
+        return app.state.jobs.active()
 
     @app.get("/jobs/{job_id}", dependencies=[Depends(auth)])
     def job_status(job_id: str):
@@ -227,6 +245,65 @@ def create_app(
         finally:
             conn.close()
 
+    # ----- correcting data: remove / re-analyze --------------------- #
+    # Only database rows are removed; the image files on disk are never touched.
+    @app.delete("/patients/{patient_id}", dependencies=[Depends(auth)])
+    def remove_patient(patient_id: int):
+        conn = _db()
+        try:
+            if not db_mod.get_patient(conn, patient_id):
+                raise HTTPException(404, "unknown patient")
+            return {"deleted": True, "films_removed": db_mod.delete_patient(conn, patient_id)}
+        finally:
+            conn.close()
+
+    @app.delete("/images/{image_id}", dependencies=[Depends(auth)])
+    def remove_image(image_id: int):
+        conn = _db()
+        try:
+            img = db_mod.get_image(conn, image_id)
+            if not img:
+                raise HTTPException(404, "unknown film")
+            ok = db_mod.delete_images(conn, [image_id]) == 1
+            refresh_patient_demographics(conn, img["patient_id"])
+            return {"deleted": ok}
+        finally:
+            conn.close()
+
+    @app.post("/patients/{patient_id}/reanalyze", dependencies=[Depends(auth)])
+    def reanalyze(patient_id: int, body: ReanalyzeBody):
+        """Drop the chosen results, then re-ingest the folder: ingest skips films
+        still stored, so exactly the dropped ones are read again."""
+        conn = _db()
+        try:
+            p = db_mod.get_patient(conn, patient_id)
+            if not p:
+                raise HTTPException(404, "unknown patient")
+            folder = p.get("folder_path") or ""
+            if not Path(folder).is_dir():
+                raise HTTPException(409, f"The folder is no longer on this PC: {folder}")
+            if body.scope == "image":
+                img = db_mod.get_image(conn, body.image_id or -1)
+                if not img or img["patient_id"] != patient_id:
+                    raise HTTPException(404, "unknown film for this patient")
+                if not Path(img.get("file_path") or "").is_file():
+                    raise HTTPException(409, f"The image file is no longer on this PC: {img.get('file_path')}")
+                ids = [img["id"]]
+            elif body.scope in ("failed", "all"):
+                ids = db_mod.patient_image_ids(conn, patient_id, failed_only=body.scope == "failed")
+            else:
+                raise HTTPException(400, "scope must be 'failed', 'all' or 'image'")
+            removed = db_mod.delete_images(conn, ids)
+            # results changed, so any earlier sign-off no longer applies
+            db_mod.update_patient_review(conn, patient_id, review_status="unreviewed")
+        finally:
+            conn.close()
+        cfg = settings_mod.load_config()
+        job_id = app.state.jobs.start_ingest(
+            [folder], cfg, db_path=app.state.db_path, engine_factory=app.state.engine_factory
+        )
+        return {"job_id": job_id, "films_queued": removed}
+
     @app.get("/export.xlsx", dependencies=[Depends(auth)])
     def export_xlsx():
         conn = _db()
@@ -254,7 +331,7 @@ def create_app(
                 for ev in events:
                     await websocket.send_json(ev)
                 idx += len(events)
-                if status in ("completed", "failed", "unknown"):
+                if status in ("completed", "failed", "cancelled", "unknown"):
                     await websocket.send_json({"kind": "job_end", "status": status})
                     break
                 await asyncio.sleep(0.25)

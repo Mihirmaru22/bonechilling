@@ -18,6 +18,8 @@ from typing import List, Optional, Tuple, Union
 
 from PIL import Image, ImageOps
 
+from .imaging import open_image
+
 ImageOrPath = Union[str, Path, Image.Image]
 
 
@@ -53,7 +55,7 @@ def _ensure_tesseract_cmd() -> bool:
 # Band preparation
 # --------------------------------------------------------------------------- #
 def _as_image(image: ImageOrPath) -> Image.Image:
-    return image if isinstance(image, Image.Image) else Image.open(image)
+    return image if isinstance(image, Image.Image) else open_image(image)
 
 def _prep_band(img: Image.Image, band_fraction: float, position: str) -> Image.Image:
     w, h = img.size

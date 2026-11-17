@@ -31,7 +31,31 @@ from ..core.schema import XrayFacts
 from ..data import db as db_mod
 from ..engines.base import EngineResult, VisionEngine
 
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".dcm", ".dicom"}
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".dcm", ".dicom", ".tif", ".tiff", ".bmp", ".webp"}
+StopFn = Callable[[], bool]
+
+
+def is_candidate(f: Path) -> bool:
+    """An image we can read: known extension, or an extension-less DICOM
+    (scanners often write files like ``IM0001`` with no suffix)."""
+    if not f.is_file() or f.name.startswith(".") or f.name.lower() in ("thumbs.db", "desktop.ini"):
+        return False
+    if f.suffix.lower() in IMAGE_EXTS:
+        return True
+    return f.suffix == "" and dicom_mod.is_dicom(f)
+
+
+def clean_path(raw: str) -> str:
+    """Undo common copy-paste damage: surrounding quotes (Windows "Copy as
+    path"), whitespace, and file:// URLs."""
+    p = (raw or "").strip().strip('"').strip("'").strip()
+    if p.lower().startswith("file://"):
+        from urllib.parse import unquote, urlparse
+        u = urlparse(p)
+        p = unquote(u.path)
+        if len(p) > 2 and p[0] == "/" and p[2] == ":":   # /C:/x -> C:/x
+            p = p[1:]
+    return p
 ProgressFn = Callable[["ProgressEvent"], None]
 
 
@@ -56,11 +80,10 @@ def discover_patient_folders(paths) -> List[Path]:
     seen = set()
 
     def has_images(d: Path) -> bool:
-        return any(
-            f.suffix.lower() in IMAGE_EXTS
-            for f in d.iterdir()
-            if f.is_file() and not f.name.startswith(".")
-        )
+        try:
+            return any(is_candidate(f) for f in d.iterdir())
+        except OSError:
+            return False
 
     def add(d: Path):
         d = d.resolve()
@@ -69,18 +92,21 @@ def discover_patient_folders(paths) -> List[Path]:
             found.append(d)
 
     for item in paths:
-        p = Path(item).resolve()
+        p = Path(clean_path(str(item))).resolve()
         if not p.exists():
             continue
         if p.is_file():
-            if p.suffix.lower() in IMAGE_EXTS:
+            if is_candidate(p):
                 add(p.parent)
         else:
-            subdirs = [d for d in p.iterdir() if d.is_dir() and not d.name.startswith(".")]
+            try:
+                subdirs = [d for d in p.iterdir() if d.is_dir() and not d.name.startswith(".")]
+            except OSError:
+                continue
             if subdirs:
                 for root, dirs, files in os.walk(str(p)):
                     dirs[:] = [d for d in dirs if not d.startswith(".") and d != "__MACOSX"]
-                    if any(Path(f).suffix.lower() in IMAGE_EXTS for f in files if not f.startswith(".")):
+                    if any(is_candidate(Path(root) / f) for f in files):
                         add(Path(root))
             elif has_images(p):
                 add(p)
@@ -210,32 +236,60 @@ def process_folder(
     ocr_backend: str = "tesseract",
     concurrency: Optional[int] = None,
     progress: Optional[ProgressFn] = None,
+    should_stop: Optional[StopFn] = None,
 ) -> int:
-    """Process one patient folder. Returns the count of newly saved images."""
+    """Process one patient folder. Returns the count of newly saved images.
+
+    Each film is saved as soon as it is analyzed, so quitting mid-folder keeps
+    the work done so far. Films whose earlier attempt failed are retried; films
+    analyzed successfully before are skipped.
+    """
+    stop = should_stop or (lambda: False)
     folder = Path(folder)
-    imgs = sorted(
-        f for f in folder.iterdir()
-        if f.is_file() and not f.name.startswith(".") and f.suffix.lower() in IMAGE_EXTS
-    )
+    imgs = sorted((f for f in folder.iterdir() if is_candidate(f)), key=lambda f: f.name.lower())
     _emit(progress, ProgressEvent("folder_start", folder=folder.name, total=len(imgs),
                                   message=f"Analyzing {folder.name} ({len(imgs)} files)"))
 
-    patient_id = db_mod.get_or_create_patient_for_folder(conn, str(folder.resolve()), folder.name)
+    folder_key = str(folder.resolve())
+    existed = conn.execute("SELECT id FROM patients WHERE folder_path = ?", (folder_key,)).fetchone()
+    patient_id = db_mod.get_or_create_patient_for_folder(conn, folder_key, folder.name)
 
-    # Pre-filter + idempotency screening before spending model time.
-    # Hash once here and reuse it in analyze_image (avoids reading each file twice).
+    # Screening before spending model time. Hash once and reuse it later.
     todo: List[tuple] = []  # (path, sha)
     seen_sha = set()
+    skipped = failed = 0
     for img in imgs:
-        # DICOM is never a "non-X-ray"; only screen photos with the heuristic.
-        if not dicom_mod.is_dicom(img) and classify(img) == PrefilterVerdict.NON_XRAY:
-            _emit(progress, ProgressEvent("image_skipped", folder=folder.name, file=img.name,
-                                          message="skipped: confident non-X-ray"))
-            continue
-        sha = sha256_file(img)
-        if sha in seen_sha or db_mod.image_exists(conn, sha):
-            _emit(progress, ProgressEvent("image_skipped", folder=folder.name, file=img.name,
-                                          message="skipped: already ingested"))
+        if stop():
+            break
+        try:
+            sha = sha256_file(img)
+            if sha in seen_sha:
+                skipped += 1
+                _emit(progress, ProgressEvent("image_skipped", folder=folder.name, file=img.name,
+                                              message="skipped: identical copy of another file in this folder"))
+                continue
+            prev = db_mod.image_by_sha(conn, sha)
+            if prev and prev.get("error"):
+                db_mod.delete_images(conn, [prev["id"]])      # last attempt failed: retry it
+                _emit(progress, ProgressEvent("image_retry", folder=folder.name, file=img.name,
+                                              message="retrying: previous attempt failed"))
+            elif prev:
+                skipped += 1
+                where = "" if prev["patient_id"] == patient_id else \
+                    f" under {Path(prev.get('folder_path') or '?').name}"
+                _emit(progress, ProgressEvent("image_skipped", folder=folder.name, file=img.name,
+                                              message=f"skipped: already analyzed{where}"))
+                continue
+            # DICOM is never a "non-X-ray"; only screen photos with the heuristic.
+            if not dicom_mod.is_dicom(img) and classify(img) == PrefilterVerdict.NON_XRAY:
+                skipped += 1
+                _emit(progress, ProgressEvent("image_skipped", folder=folder.name, file=img.name,
+                                              message="skipped: not an X-ray (photo check)"))
+                continue
+        except OSError as exc:
+            failed += 1
+            _emit(progress, ProgressEvent("error", folder=folder.name, file=img.name,
+                                          message=f"{img.name}: can't read file ({exc.strerror or exc})"))
             continue
         seen_sha.add(sha)
         todo.append((img, sha))
@@ -244,37 +298,78 @@ def process_folder(
     if concurrency is None:
         concurrency = 1 if getattr(engine, "config", None) and engine.config.is_local else 4
 
-    def _work(item: tuple) -> Dict:
+    def _work(item: tuple) -> Optional[Dict]:
+        if stop():
+            return None
         img, sha = item
-        return analyze_image(img, engine, ocr_backend, escalation_engine, precomputed_sha=sha)
-
-    records: List[Dict] = []
-    if concurrency and concurrency > 1 and len(todo) > 1:
-        with ThreadPoolExecutor(max_workers=concurrency) as pool:
-            records = list(pool.map(_work, todo))
-    else:
-        records = [_work(img) for img in todo]
+        try:
+            return analyze_image(img, engine, ocr_backend, escalation_engine, precomputed_sha=sha)
+        except Exception as exc:  # noqa: BLE001 - one bad file must not end the batch
+            return {"_crash": f"{type(exc).__name__}: {exc}"}
 
     saved = 0
-    best_demographics: Dict = {}
-    for (img, _sha), rec in zip(todo, records):
-        # The VLM's image_type is the final authority on whether to keep it.
-        if rec["facts"].image_type == "Non-X-ray":
-            _emit(progress, ProgressEvent("image_skipped", folder=folder.name, file=img.name,
-                                          message="skipped: VLM says non-X-ray"))
-            continue
-        if db_mod.save_analysis(conn, patient_id, rec) is not None:
-            saved += 1
-            _collect_demographics(best_demographics, rec)
-        _emit(progress, ProgressEvent("image_done", folder=folder.name, file=img.name,
-                                      message=rec["facts"].impression or "analyzed",
-                                      extra={"engine": rec["engine"]}))
+    pool = ThreadPoolExecutor(max_workers=concurrency) if concurrency and concurrency > 1 and len(todo) > 1 else None
+    try:
+        results = pool.map(_work, todo) if pool else (_work(t) for t in todo)
+        for (img, _sha), rec in zip(todo, results):   # results arrive in order; save each at once
+            if rec is None:          # cancelled
+                continue
+            if "_crash" in rec:
+                failed += 1
+                _emit(progress, ProgressEvent("image_failed", folder=folder.name, file=img.name,
+                                              message=f"failed: {rec['_crash']}"))
+                continue
+            # The VLM's image_type is the final authority on whether to keep it.
+            if rec["facts"].image_type == "Non-X-ray" and not rec.get("error"):
+                skipped += 1
+                _emit(progress, ProgressEvent("image_skipped", folder=folder.name, file=img.name,
+                                              message="skipped: model says this is not an X-ray"))
+                continue
+            # The same file path with new content replaces the old result.
+            old = [i for i in db_mod.image_ids_for_path(conn, patient_id, rec["file_path"])]
+            if db_mod.save_analysis(conn, patient_id, rec) is not None:
+                if old:
+                    db_mod.delete_images(conn, old)
+                if rec.get("error"):
+                    failed += 1
+                    _emit(progress, ProgressEvent("image_failed", folder=folder.name, file=img.name,
+                                                  message=f"failed: {rec['error']}"))
+                else:
+                    saved += 1
+                    _emit(progress, ProgressEvent("image_done", folder=folder.name, file=img.name,
+                                                  message=rec["facts"].impression or "analyzed",
+                                                  extra={"engine": rec["engine"]}))
+    finally:
+        if pool:
+            pool.shutdown(wait=True, cancel_futures=True)
 
-    if best_demographics:
-        db_mod.update_patient_demographics(conn, patient_id, **best_demographics)
+    refresh_patient_demographics(conn, patient_id)
+    # Don't leave an empty patient behind for a folder that yielded nothing.
+    if not existed and db_mod.patient_image_count(conn, patient_id) == 0:
+        db_mod.delete_patient(conn, patient_id)
+
+    parts = [f"{saved} saved"] + ([f"{failed} failed"] if failed else []) + ([f"{skipped} skipped"] if skipped else [])
     _emit(progress, ProgressEvent("folder_done", folder=folder.name, done=saved, total=len(imgs),
-                                  message=f"{folder.name}: {saved} films saved"))
+                                  message=f"{folder.name}: " + ", ".join(parts),
+                                  extra={"failed": failed, "skipped": skipped}))
     return saved
+
+
+def refresh_patient_demographics(conn, patient_id: int) -> None:
+    """Recompute name/age/sex from every film stored for the patient, so
+    re-reading or removing one film can't replace a good name with a worse one."""
+    import json as _json
+    acc: Dict = {}
+    for img in db_mod.get_patient_images(conn, patient_id):
+        if img.get("error"):
+            continue
+        try:
+            cc = _json.loads(img.get("crosscheck_json") or "{}")
+        except ValueError:
+            cc = {}
+        _collect_demographics(acc, {"crosscheck": cc})
+    if acc:
+        db_mod.update_patient_demographics(conn, patient_id, **acc)
 
 
 def process_batch(
@@ -286,23 +381,49 @@ def process_batch(
     concurrency: Optional[int] = None,
     progress: Optional[ProgressFn] = None,
     conn=None,
+    should_stop: Optional[StopFn] = None,
 ) -> Dict:
-    """Discover patient folders under `paths` and ingest them all."""
+    """Discover patient folders under `paths` and ingest them all.
+
+    Problems with individual paths or folders are reported as `error` events
+    and the rest of the batch carries on.
+    """
+    stop = should_stop or (lambda: False)
+    if isinstance(paths, (str, Path)):
+        paths = [paths]
+    cleaned = [clean_path(str(p)) for p in paths if clean_path(str(p))]
+    for raw in cleaned:
+        p = Path(raw)
+        if not p.exists():
+            _emit(progress, ProgressEvent("error", message=f"Not found on this PC: {raw}"))
+        elif not discover_patient_folders([raw]):
+            _emit(progress, ProgressEvent("error", message=f"No X-ray images found in: {raw}"))
+
     own_conn = conn is None
     conn = conn or db_mod.connect(db_path)
-    folders = discover_patient_folders(paths)
+    folders = discover_patient_folders(cleaned)
     total_saved = 0
+    done_folders = 0
     try:
-        for i, folder in enumerate(folders, 1):
-            total_saved += process_folder(
-                conn, folder, engine, escalation_engine, ocr_backend, concurrency, progress
-            )
+        for folder in folders:
+            if stop():
+                break
+            try:
+                total_saved += process_folder(
+                    conn, folder, engine, escalation_engine, ocr_backend, concurrency, progress, stop
+                )
+            except Exception as exc:  # noqa: BLE001 - keep going with the next folder
+                _emit(progress, ProgressEvent("error", folder=folder.name,
+                                              message=f"{folder.name}: stopped with an error ({exc})"))
+                _emit(progress, ProgressEvent("folder_done", folder=folder.name, done=0,
+                                              message=f"{folder.name}: not completed"))
+            done_folders += 1
         _emit(progress, ProgressEvent("batch_done", done=total_saved, total=len(folders),
-                                      message=f"Done: {len(folders)} folders, {total_saved} films"))
+                                      message=f"Done: {done_folders} of {len(folders)} folders, {total_saved} films"))
     finally:
         if own_conn:
             conn.close()
-    return {"folders": len(folders), "saved": total_saved}
+    return {"folders": len(folders), "saved": total_saved, "cancelled": stop()}
 
 
 # --------------------------------------------------------------------------- #

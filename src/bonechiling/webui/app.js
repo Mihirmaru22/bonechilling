@@ -253,27 +253,24 @@ views.patient = async (id) => {
           <span>ID <b>${esc(p.patient_id || "—")}</b></span>
           <span>AGE <b>${esc(p.age || "—")}</b></span>
           <span>SEX <b>${esc(p.sex || "—")}</b></span>
-          <span>FILMS <b>${pad2(imgs.length)}</b>${errors ? ` <span class="badge err">${errors} failed</span>` : ""}</span>
+          <span>FILMS <b>${pad2(imgs.length)}</b></span>
+          <span id="heroBadge">${statusBadge(p.review_status)}</span>${errors ? `<span class="badge err">${errors} failed</span>` : ""}
         </div>
-        <div class="patient-meta"><span id="heroBadge">${statusBadge(p.review_status)}</span><span class="folder">${esc(p.folder_path || "")}</span></div>
-      </div>
-      <button class="btn secondary back" id="back">${icon("back")} Worklist</button>
+        <div class="folder">${esc(p.folder_path || "")}</div>
     </header>
 
     ${conflicts ? `<div class="alert" role="alert">${icon("alert")}<div><b>Check the patient name.</b> The name printed on the film label disagrees with other sources on ${conflicts} film${conflicts > 1 ? "s" : ""}. Confirm identity before signing off.</div></div>` : ""}
 
     <div class="two-col">
       <section>
-        <div class="section-title"><h2>Films<span class="count">${pad2(imgs.length)}</span></h2><span class="muted" style="font-size:13px">What the AI read from each image</span></div>
+        <div class="section-title"><h2>Hardware</h2><span class="muted">Reconciled across all films</span></div>
+        <ul class="hw-strip">${hw.length
+          ? hw.map((h) => `<li>${esc(h)}</li>`).join("")
+          : `<li class="none">No implants or hardware detected</li>`}</ul>
+        <div class="section-title"><h2>Films<span class="count">${pad2(imgs.length)}</span></h2><span class="muted">What the AI read from each image</span></div>
         <div class="films" id="films"></div>
       </section>
       <aside class="side">
-        <div class="panel">
-          <div class="panel-head"><div><h3>Hardware</h3><p>Reconciled across all films</p></div></div>
-          <div class="panel-body">${hw.length
-            ? `<ol class="hw-list">${hw.map((h) => `<li><span>${esc(h)}</span></li>`).join("")}</ol>`
-            : `<p class="muted" style="margin:0">No implants or hardware detected.</p>`}</div>
-        </div>
         <div class="panel">
           <div class="panel-head"><div><h3>Surgeon sign-off</h3><p>This is what goes into the Excel export</p></div></div>
           <div class="panel-body">
@@ -290,7 +287,6 @@ views.patient = async (id) => {
       </aside>
     </div>`;
 
-  $("#back").onclick = () => navigate("worklist");
   const crumb = $("#crumbWl");
   crumb.onclick = () => navigate("worklist");
   crumb.onkeydown = (e) => { if (e.key === "Enter") navigate("worklist"); };
@@ -309,7 +305,6 @@ views.patient = async (id) => {
     const status = img.error ? `<span class="badge err">Error</span>` : conflict ? `<span class="badge warn">Name conflict</span>` : `<span class="badge ok">Read OK</span>`;
     films.appendChild(el(`<article class="film ${cls}" style="--i:${i}">
       <div class="film-top">
-        <span class="clip" aria-hidden="true"></span>
         ${lateralityMarker(img.laterality)}
         <h4>${esc(img.body_part || "Unknown body part")}</h4>
         <div class="views">${vws.length ? vws.map((v) => `<span class="chip">${esc(v)}</span>`).join("") : "No view detected"}</div>

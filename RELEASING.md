@@ -6,7 +6,8 @@ Releases are published automatically by `.github/workflows/release.yml`.
    - `src/bonechiling/__init__.py` → `__version__ = "0.2.1"`
    - `pyproject.toml` → `version = "0.2.1"`
 2. Commit and push to `main`.
-3. Tag and push the tag:
+3. Either click **Actions → Release → Run workflow** on GitHub (it creates the
+   `v0.2.1` tag for you), or tag and push it yourself:
    ```bash
    git tag v0.2.1
    git push origin v0.2.1
